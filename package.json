@@ -1,0 +1,23 @@
+{
+  "name": "ai-habit-quest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gamified habit-tracker Telegram Mini App with AI plan generation",
+  "workspaces": [
+    "backend",
+    "web"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace backend run start:dev",
+    "dev:web": "npm --workspace web run dev",
+    "build": "npm run build --workspaces --if-present",
+    "prisma:generate": "npm --workspace backend run prisma:generate",
+    "prisma:migrate": "npm --workspace backend run prisma:migrate",
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down -v"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
