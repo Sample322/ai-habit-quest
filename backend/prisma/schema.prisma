@@ -1,0 +1,218 @@
+// AI Habit Quest — Prisma schema
+// Single source of truth for the relational model.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GoalCategory {
+  sport
+  study
+  discipline
+  custom
+}
+
+enum GoalStatus {
+  active
+  archived
+}
+
+enum SubscriptionProvider {
+  yookassa
+  telegram_stars
+  manual
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  past_due
+  canceled
+  expired
+}
+
+enum PaymentEventStatus {
+  pending
+  succeeded
+  failed
+  refunded
+}
+
+model User {
+  id            String   @id @default(cuid())
+  telegramId    BigInt   @unique
+  username      String?
+  firstName     String?
+  lastName      String?
+  languageCode  String   @default("ru")
+  timezone      String   @default("Europe/Moscow")
+  reminderHour  Int      @default(9)
+  reminderMinute Int     @default(0)
+  isPremium     Boolean  @default(false)
+  premiumUntil  DateTime?
+  streakCurrent Int      @default(0)
+  streakBest    Int      @default(0)
+  xpTotal       Int      @default(0)
+  level         Int      @default(0)
+  referralCode  String   @unique
+  referredById  String?
+  referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
+  referrals     User[]   @relation("Referrals")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  goals         Goal[]
+  habits        Habit[]
+  dailyTasks    DailyTask[]
+  badges        UserBadge[]
+  subscriptions Subscription[]
+  payments      PaymentEvent[]
+  feedback      Feedback[]
+
+  @@index([referredById])
+}
+
+model Goal {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  category    GoalCategory
+  status      GoalStatus   @default(active)
+  horizonDays Int          @default(7)
+  startedAt   DateTime     @default(now())
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  habits      Habit[]
+  plan        Plan?
+
+  @@index([userId, status])
+}
+
+model Habit {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title     String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dailyTasks DailyTask[]
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  goalId      String   @unique
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  horizonDays Int
+  provider    String   // "stub" | "ollama"
+  payload     Json     // full plan JSON returned by ai-service
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DailyTask {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId     String
+  habit       Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  localDate   DateTime  @db.Date
+  title       String
+  doneAt      DateTime?
+  xpAwarded   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([habitId, localDate])
+  @@index([userId, localDate])
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  title       String
+  description String
+  iconKey     String
+  createdAt   DateTime    @default(now())
+
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId  String
+  badge    Badge   @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  earnedAt DateTime @default(now())
+
+  @@id([userId, badgeId])
+}
+
+model Subscription {
+  id                String               @id @default(cuid())
+  userId            String
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          SubscriptionProvider
+  status            SubscriptionStatus
+  paymentMethodId   String?              // YooKassa saved card token
+  externalId        String?              // YooKassa subscription/payment id
+  currentPeriodEnd  DateTime?
+  cancelAtPeriodEnd Boolean              @default(false)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  payments          PaymentEvent[]
+
+  @@index([userId, status])
+}
+
+model PaymentEvent {
+  id             String              @id @default(cuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription?       @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  provider       SubscriptionProvider
+  externalId     String?
+  amountMinor    Int                 // in minor units (kopeks or stars)
+  currency       String              // "RUB" | "XTR"
+  status         PaymentEventStatus
+  rawPayload     Json?
+  createdAt      DateTime            @default(now())
+
+  @@index([userId, createdAt])
+  @@index([externalId])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model PlanCache {
+  id          String   @id @default(cuid())
+  cacheKey    String   @unique // hash of category|level|horizonDays|provider
+  category    GoalCategory
+  horizonDays Int
+  provider    String
+  payload     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
