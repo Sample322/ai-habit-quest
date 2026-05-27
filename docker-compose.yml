@@ -77,7 +77,7 @@ services:
         VITE_TG_BOT_USERNAME: ${VITE_TG_BOT_USERNAME}
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "5173:8080"
     depends_on:
       - backend
 

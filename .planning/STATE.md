@@ -15,13 +15,16 @@
 
 ## Open follow-ups
 
-- [ ] Rotate Telegram bot token (the dev one was shared in chat).
+- [x] Telegram bot username locked to `AI_Habit_Tracking_bot` (token kept per user's call — not rotated).
 - [ ] Provide YooKassa shopId + secret when Phase 3 starts.
-- [ ] Decide on production AI host (Timeweb GPU vs. quantised CPU); for v1 dev uses Ollama on the developer's machine.
+- [ ] Decide on production AI host. Phase-3 plan: ship MVP on Timeweb Apps with `AI_PROVIDER=stub`; later provision a Timeweb GPU VPS for Ollama and flip the env var.
+- [ ] User to create GitHub repo and push the existing commits, then connect Timeweb to it.
+- [ ] User to create Timeweb account, top up balance, and follow `DEPLOY-TIMEWEB.md`.
 
 ## Quick links
 
 - [PROJECT.md](PROJECT.md)
 - [REQUIREMENTS.md](REQUIREMENTS.md)
 - [ROADMAP.md](ROADMAP.md)
+- [DEPLOY-TIMEWEB.md](DEPLOY-TIMEWEB.md)
 - [research/SUMMARY.md](research/SUMMARY.md)

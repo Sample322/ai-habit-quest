@@ -89,9 +89,23 @@ ai-habit-quest/
 └── README.md
 ```
 
+## Deploying to Timeweb Cloud (GitHub → Dockerfile, auto-deploy on push)
+
+Full step-by-step is in [`.planning/DEPLOY-TIMEWEB.md`](.planning/DEPLOY-TIMEWEB.md). Short version:
+
+1. Push the repo to GitHub.
+2. Create 3 Timeweb **Apps** (one per service) pointed at the same repo with different `Project directory` values: `backend`, `web`, `ai-service`. Build type = **Dockerfile**, branch = `main`, auto-deploy ON.
+3. Create 1 Timeweb **Managed PostgreSQL** (`Cloud DB 1/2/20`, ~450 ₽/mo); paste its DSN into the backend App's `DATABASE_URL` env var.
+4. Set the other env vars per service (full table in the deploy guide).
+5. Paste the web App's HTTPS tech domain into @BotFather → menu button → URL.
+
+Push to `main` → all three Apps rebuild automatically. MVP cost: ~1300 ₽/mo (no GPU needed; AI runs in stub mode by default).
+
+For real on-prem LLM inference (Qwen3-4B / Gemma 3-4B via Ollama) you'll need a separate Timeweb **GPU VPS** later — instructions in the same guide. Switching is a one-env-var flip with no code change.
+
 ## Next steps
 
 The roadmap is in [`.planning/ROADMAP.md`](.planning/ROADMAP.md). Phase 1 ships the day-1 loop (auth → goal → 7-day plan). Phase 3 adds YooKassa and Telegram Stars — that's when you'll need:
 
 - YooKassa `shopId` and `secretKey` (test or production)
-- A public HTTPS URL for Telegram WebApp + bot webhooks (ngrok / Cloudflare Tunnel / your VPS)
+- A public HTTPS URL for Telegram WebApp + bot webhooks (Timeweb gives you `*.twc1.net` for free; production custom domain later)
