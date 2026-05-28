@@ -25,16 +25,18 @@ RUN npx prisma generate \
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# curl + wget so any platform healthcheck command can run. We do NOT ship a
+# HEALTHCHECK directive of our own — Timeweb Cloud Apps injects its own
+# healthcheck based on the path you set in the UI, and having two competing
+# healthchecks leaves the container stuck in "unhealthy".
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates wget \
+  && apt-get install -y --no-install-recommends openssl ca-certificates curl wget \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1
 # `db push` syncs schema.prisma -> DB in one shot. No migration files needed
 # for Phase 1. We will switch to `migrate deploy` once the schema is stable
 # and we generate the first proper migration set.
