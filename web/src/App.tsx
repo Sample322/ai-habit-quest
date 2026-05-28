@@ -70,12 +70,24 @@ export function App() {
   }
 
   if (status === 'auth_failed') {
+    // Client-side diagnostic — visible in the failure card so we can see
+    // exactly what the Telegram SDK exposed without needing devtools.
+    const tg = window.Telegram?.WebApp;
+    const initData = tg?.initData ?? '';
+    const diag = {
+      hasTelegram: typeof window.Telegram !== 'undefined',
+      hasWebApp: !!tg,
+      initDataLen: initData.length,
+      hasUser: !!tg?.initDataUnsafe?.user,
+      apiBase: import.meta.env.VITE_API_BASE_URL ?? '(unset)',
+    };
     return (
       <Center>
         <div className="surface max-w-sm text-center space-y-3">
           <div className="text-2xl">🔒</div>
           <div className="text-muted">{i.errors.auth}</div>
-          {error && <div className="text-xs text-muted/70">{error}</div>}
+          {error && <div className="text-xs text-muted/70 break-words">{error}</div>}
+          <pre className="text-[10px] text-left bg-black/20 rounded p-2 overflow-auto">{JSON.stringify(diag, null, 2)}</pre>
         </div>
       </Center>
     );

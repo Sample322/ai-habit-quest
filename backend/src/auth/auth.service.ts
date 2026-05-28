@@ -31,10 +31,18 @@ export class AuthService {
     let parsed: ParsedInitData;
     try {
       const botToken = envString('TELEGRAM_WEBAPP_BOT_TOKEN');
+      // Diagnostic log — safe (no secret leak): just length + 4-char prefix/suffix.
+      const tokenFp = `${botToken.slice(0, 4)}…${botToken.slice(-4)} (len=${botToken.length})`;
+      const initDataLen = initData?.length ?? 0;
+      this.logger.log(`auth attempt: initDataLen=${initDataLen}, token=${tokenFp}`);
       parsed = verifyAndParseInitData(initData, botToken);
     } catch (err) {
-      this.logger.warn(`initData rejected: ${(err as Error).message}`);
-      throw new UnauthorizedException('Invalid Telegram initData');
+      const msg = (err as Error).message;
+      this.logger.warn(`initData rejected: ${msg}`);
+      // Surface the specific reason during early production so we can debug
+      // misconfigured envs / wrong bot tokens / expired data from the client.
+      // Tighten back to a generic message once auth is stable.
+      throw new UnauthorizedException(`initData rejected: ${msg}`);
     }
 
     const telegramId = BigInt(parsed.user.id);
