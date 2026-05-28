@@ -30,11 +30,17 @@ export class AuthService {
   async loginWithInitData(initData: string): Promise<AuthResult> {
     let parsed: ParsedInitData;
     try {
-      const botToken = envString('TELEGRAM_WEBAPP_BOT_TOKEN');
+      // Prefer TELEGRAM_WEBAPP_BOT_TOKEN when explicitly set (lets you sign
+      // WebApp data with a different bot than the one handling messages).
+      // Fall back to TELEGRAM_BOT_TOKEN since in 99% of deployments they are
+      // the same value — and it removes a common "Missing env var" footgun.
+      const webappToken = envString('TELEGRAM_WEBAPP_BOT_TOKEN', '');
+      const botToken = webappToken || envString('TELEGRAM_BOT_TOKEN');
       // Diagnostic log — safe (no secret leak): just length + 4-char prefix/suffix.
       const tokenFp = `${botToken.slice(0, 4)}…${botToken.slice(-4)} (len=${botToken.length})`;
       const initDataLen = initData?.length ?? 0;
-      this.logger.log(`auth attempt: initDataLen=${initDataLen}, token=${tokenFp}`);
+      const tokenSource = webappToken ? 'WEBAPP' : 'BOT_TOKEN fallback';
+      this.logger.log(`auth attempt: initDataLen=${initDataLen}, token=${tokenFp} [${tokenSource}]`);
       parsed = verifyAndParseInitData(initData, botToken);
     } catch (err) {
       const msg = (err as Error).message;
