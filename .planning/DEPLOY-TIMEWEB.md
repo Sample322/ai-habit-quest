@@ -227,11 +227,38 @@ git push -u origin main
 
 ---
 
-# Ollama on Timeweb — when and how
+# Real AI — three paths
 
-Apps don't support GPU. To run **real** Qwen3-4B / Gemma 3-4B on Timeweb you need a separate **Cloud Server with GPU**. Plan it like this:
+## Option A0 — Cloud OpenAI-compatible API (RECOMMENDED, cheapest)
 
-## Option A — MVP launch (recommended): keep `AI_PROVIDER=stub`
+Use OpenRouter, DeepInfra, Together.ai, or any provider that exposes a Chat
+Completions endpoint. Zero ops, $0–$5/mo for typical MVP traffic, available
+models include Qwen, Gemma, Llama 3.x, Mistral.
+
+1. Create an account at https://openrouter.ai (or DeepInfra/Together).
+2. Top up $5 — enough for thousands of plan generations.
+3. Create an API key. Pick a model from the catalogue; for our prompt the
+   sweet spot is **`meta-llama/llama-3.3-70b-instruct:free`** (free tier) or
+   **`qwen/qwen-2.5-7b-instruct`** (~$0.10 per 1M tokens, very cheap).
+4. In Timeweb panel → `ahq-ai` App → Variables:
+   - `AI_PROVIDER` = `openai`
+   - `OPENAI_BASE_URL` = `https://openrouter.ai/api/v1` (or `https://api.deepinfra.com/v1/openai`)
+   - `OPENAI_API_KEY` = the key from step 3
+   - `OPENAI_MODEL` = e.g. `meta-llama/llama-3.3-70b-instruct:free`
+   - `OPENAI_APP_NAME` = `AI Habit Quest`
+   - `OPENAI_APP_URL` = your web tech domain (helps OpenRouter analytics)
+5. Save → ai-service redeploys (~1 min). Test:
+   ```
+   curl -X POST https://<AI_DOMAIN>/generate-plan \
+     -H 'Content-Type: application/json' \
+     -d '{"category":"sport","goalTitle":"Run 3x/week","horizonDays":7}'
+   ```
+   The response should contain `"provider":"openai"` (not `"stub"`).
+6. The `/healthz` endpoint also reflects the active provider — useful for verifying envs are loaded.
+
+> **Automatic fallback:** if OpenRouter ever fails (key revoked, rate-limited, model deprecated), ai-service silently falls back to the stub provider. The end-user never sees a broken plan.
+
+## Option A — MVP launch with stub only: keep `AI_PROVIDER=stub`
 
 The stub provider returns deterministic, hand-tuned per-category plans (`backend/src/ai/stub-plans.ts` and `ai-service/stub_plans.py`). They're good enough to validate the loop, ship to beta users, and measure retention without paying for a GPU.
 

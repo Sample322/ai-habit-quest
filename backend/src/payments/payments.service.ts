@@ -108,8 +108,8 @@ export class PaymentsService {
   }
 
   /**
-   * Webhook entry for Telegram Stars `successful_payment` callbacks (Bot API).
-   * Real wiring will live next to the bot webhook in Phase 3.
+   * Apply a successful Telegram Stars payment by internal userId.
+   * Used by webhook variants where we already resolved the user.
    */
   async handleStarsSuccess(userId: string, invoicePayload: string, stars: number) {
     await this.prisma.paymentEvent.create({
@@ -136,6 +136,46 @@ export class PaymentsService {
       data: {
         isPremium: true,
         premiumUntil: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  /**
+   * Called by the grammy bot when Telegram emits `successful_payment`.
+   * Resolves the internal user by telegramId, makes the upgrade idempotent
+   * via the (provider, externalId) uniqueness on the payload.
+   */
+  async handleStarsSuccessFromBot(input: {
+    telegramId: bigint;
+    invoicePayload: string;
+    stars: number;
+    currency: string;
+    telegramPaymentChargeId: string;
+  }): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { telegramId: input.telegramId } });
+    if (!user) {
+      this.logger.warn(`Stars payment for unknown telegramId=${input.telegramId}`);
+      return;
+    }
+    // Idempotency: if we already processed this charge, skip.
+    const existing = await this.prisma.paymentEvent.findFirst({
+      where: { externalId: input.telegramPaymentChargeId, provider: SubscriptionProvider.telegram_stars },
+    });
+    if (existing) {
+      this.logger.log(`Stars payment ${input.telegramPaymentChargeId} already processed`);
+      return;
+    }
+    await this.handleStarsSuccess(user.id, input.invoicePayload, input.stars);
+    // Also persist the Telegram charge id separately so repeated webhooks are deduped.
+    await this.prisma.paymentEvent.create({
+      data: {
+        userId: user.id,
+        provider: SubscriptionProvider.telegram_stars,
+        externalId: input.telegramPaymentChargeId,
+        amountMinor: input.stars,
+        currency: input.currency,
+        status: PaymentEventStatus.succeeded,
+        rawPayload: input as unknown as object,
       },
     });
   }

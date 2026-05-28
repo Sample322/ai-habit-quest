@@ -1,8 +1,14 @@
 """AI Habit Quest plan-generation service.
 
 Provider switch (env AI_PROVIDER):
-  - "stub"   : deterministic per-category plans, used in v1.
-  - "ollama" : calls a local Ollama instance (e.g. qwen3:4b or gemma3:4b).
+  - "stub"   : deterministic per-category plans, used as MVP/fallback.
+  - "openai" : any OpenAI-compatible Chat Completions endpoint
+               (OpenRouter, DeepInfra, Together.ai, vLLM, LiteLLM, etc.).
+  - "ollama" : a local Ollama instance (qwen3:4b, gemma3:4b, ...).
+
+All providers must return a plan with the same shape (habits[], schedule[]).
+On any provider failure we silently fall back to the stub so the user never
+sees a broken onboarding.
 """
 
 from __future__ import annotations
@@ -22,10 +28,19 @@ logger = logging.getLogger("ai-service")
 logging.basicConfig(level=logging.INFO)
 
 AI_PROVIDER = os.getenv("AI_PROVIDER", "stub").lower()
+
+# OpenAI-compatible cloud config (OpenRouter by default, DeepInfra/Together also work)
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+OPENAI_APP_NAME = os.getenv("OPENAI_APP_NAME", "AI Habit Quest")
+OPENAI_APP_URL = os.getenv("OPENAI_APP_URL", "https://ai-habit-quest.local")
+
+# Ollama config (local self-hosted)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 
-app = FastAPI(title="AI Habit Quest — plan generator", version="0.1.0")
+app = FastAPI(title="AI Habit Quest — plan generator", version="0.2.0")
 
 
 Category = Literal["sport", "study", "discipline", "custom"]
@@ -51,7 +66,7 @@ class PlanDay(BaseModel):
 
 
 class PlanResponse(BaseModel):
-    provider: Literal["stub", "ollama"]
+    provider: Literal["stub", "openai", "ollama"]
     category: Category
     horizonDays: int
     habits: list[PlanHabit]
@@ -60,19 +75,32 @@ class PlanResponse(BaseModel):
 
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
-    return {"status": "ok", "provider": AI_PROVIDER}
+    return {
+        "status": "ok",
+        "provider": AI_PROVIDER,
+        "openai_base_url": OPENAI_BASE_URL if AI_PROVIDER == "openai" else "",
+        "openai_model": OPENAI_MODEL if AI_PROVIDER == "openai" else "",
+    }
 
 
 @app.post("/generate-plan", response_model=PlanResponse)
 async def generate_plan(req: PlanRequest) -> PlanResponse:
-    if AI_PROVIDER == "ollama":
+    if AI_PROVIDER == "openai":
         try:
-            plan = await _generate_with_ollama(req)
-            return plan
-        except Exception as exc:  # noqa: BLE001 — fall back to stub on any provider failure
-            logger.warning("Ollama failed, falling back to stub: %s", exc)
+            return await _generate_with_openai(req)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OpenAI provider failed, falling back to stub: %s", exc)
+    elif AI_PROVIDER == "ollama":
+        try:
+            return await _generate_with_ollama(req)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Ollama provider failed, falling back to stub: %s", exc)
     return _generate_with_stub(req)
 
+
+# ----------------------------------------------------------------------------
+# Stub provider
+# ----------------------------------------------------------------------------
 
 def _generate_with_stub(req: PlanRequest) -> PlanResponse:
     data = build_stub_plan(
@@ -89,6 +117,59 @@ def _generate_with_stub(req: PlanRequest) -> PlanResponse:
     )
 
 
+# ----------------------------------------------------------------------------
+# OpenAI-compatible provider (OpenRouter, DeepInfra, ...)
+# ----------------------------------------------------------------------------
+
+async def _generate_with_openai(req: PlanRequest) -> PlanResponse:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+
+    prompt = _build_prompt(req)
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+        # OpenRouter recommends sending these for analytics + rate-limit fairness.
+        "HTTP-Referer": OPENAI_APP_URL,
+        "X-Title": OPENAI_APP_NAME,
+    }
+    payload = {
+        "model": OPENAI_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a habit-coach producing structured daily plans. "
+                    "Respond ONLY with strict JSON matching the requested schema. "
+                    "No markdown fences, no prose, no commentary."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.4,
+        "max_tokens": 2000,
+        "response_format": {"type": "json_object"},
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers)
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"OpenAI API {resp.status_code}: {resp.text[:200]}")
+        body = resp.json()
+
+    try:
+        content = body["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail=f"OpenAI response missing content: {exc}") from exc
+
+    parsed = _parse_plan_json(content)
+    return _build_plan_response(req, parsed, provider="openai")
+
+
+# ----------------------------------------------------------------------------
+# Ollama provider (kept for self-hosted GPU deployments)
+# ----------------------------------------------------------------------------
+
 async def _generate_with_ollama(req: PlanRequest) -> PlanResponse:
     prompt = _build_prompt(req)
     payload = {
@@ -102,35 +183,66 @@ async def _generate_with_ollama(req: PlanRequest) -> PlanResponse:
         resp = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
         resp.raise_for_status()
         body = resp.json()
-    raw = body.get("response", "")
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail=f"Ollama returned non-JSON: {exc}") from exc
+    parsed = _parse_plan_json(body.get("response", ""))
+    return _build_plan_response(req, parsed, provider="ollama")
 
-    habits = parsed.get("habits") or []
-    schedule = parsed.get("schedule") or []
-    if not habits or not schedule:
-        raise HTTPException(status_code=502, detail="Ollama plan missing habits or schedule")
 
-    return PlanResponse(
-        provider="ollama",
-        category=req.category,
-        horizonDays=req.horizonDays,
-        habits=[PlanHabit(title=h.get("title", "Habit"), description=h.get("description")) for h in habits[:3]],
-        schedule=[
-            PlanDay(day=int(d.get("day", i + 1)), tasks=[str(t) for t in (d.get("tasks") or [])][:3])
-            for i, d in enumerate(schedule[: req.horizonDays])
-        ],
-    )
-
+# ----------------------------------------------------------------------------
+# Shared helpers
+# ----------------------------------------------------------------------------
 
 def _build_prompt(req: PlanRequest) -> str:
     lang = "Russian" if req.language == "ru" else "English"
     return (
-        f"You are a habit-coach. Build a JSON plan for category={req.category}, "
-        f"goalTitle={req.goalTitle!r}, level={req.level}, horizonDays={req.horizonDays}. "
-        f"Output strict JSON with keys: habits (array of {{title, description}}, max 3 items), "
-        f"schedule (array of {{day, tasks}} where tasks is an array of at most 3 short imperative strings, "
-        f"one per habit, day starts at 1). All text in {lang}. No prose, JSON only."
+        f"Build a JSON plan for category={req.category}, goalTitle={req.goalTitle!r}, "
+        f"level={req.level}, horizonDays={req.horizonDays}.\n"
+        f"Output strict JSON with exactly these keys:\n"
+        f'  "habits": array of up to 3 objects {{ "title": short string, "description": one-sentence string }}\n'
+        f'  "schedule": array of {req.horizonDays} objects, one per day, each with\n'
+        f'              {{ "day": 1..{req.horizonDays}, "tasks": array of exactly 3 short imperative strings }}\n'
+        f"Each task is a single concrete action the user can do today, max 80 characters.\n"
+        f"Day 1 should be very easy (entry barrier). Difficulty progresses gradually.\n"
+        f"All text written in {lang}. Do not wrap in markdown. JSON only."
+    )
+
+
+def _parse_plan_json(raw: str) -> dict:
+    raw = raw.strip()
+    # Some models still wrap output in ``` despite instructions. Strip it.
+    if raw.startswith("```"):
+        raw = raw.strip("`").lstrip("json").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=f"Model returned non-JSON: {exc}") from exc
+
+
+def _build_plan_response(req: PlanRequest, parsed: dict, provider: str) -> PlanResponse:
+    habits_raw = parsed.get("habits") or []
+    schedule_raw = parsed.get("schedule") or []
+    if not habits_raw or not schedule_raw:
+        raise HTTPException(status_code=502, detail="Plan missing habits or schedule")
+
+    habits = [
+        PlanHabit(
+            title=str(h.get("title", "Habit"))[:120],
+            description=(str(h["description"])[:200] if h.get("description") else None),
+        )
+        for h in habits_raw[:3]
+    ]
+    schedule: list[PlanDay] = []
+    for i, d in enumerate(schedule_raw[: req.horizonDays]):
+        tasks_raw = d.get("tasks") or []
+        tasks = [str(t)[:120] for t in tasks_raw][:3]
+        # Some models emit fewer than 3 tasks — pad with the last habit to keep the daily loop intact.
+        while len(tasks) < 3 and habits:
+            tasks.append(habits[-1].title)
+        schedule.append(PlanDay(day=int(d.get("day", i + 1)), tasks=tasks))
+
+    return PlanResponse(
+        provider=provider,  # type: ignore[arg-type]
+        category=req.category,
+        horizonDays=req.horizonDays,
+        habits=habits,
+        schedule=schedule,
     )

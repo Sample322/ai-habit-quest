@@ -1,15 +1,20 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
 import { Bot, InlineKeyboard } from 'grammy';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { envString } from '../config/env';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class BotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotService.name);
   private bot?: Bot;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => PaymentsService))
+    private readonly payments: PaymentsService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     const token = envString('TELEGRAM_BOT_TOKEN', '');
@@ -22,19 +27,33 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
     this.bot.command('start', async (ctx) => {
       const botUsername = envString('TELEGRAM_BOT_USERNAME', '');
       const buttonUrl = botUsername ? `https://t.me/${botUsername}/app` : undefined;
+      const isRu = ctx.from?.language_code?.startsWith('ru');
       const kb = buttonUrl
-        ? new InlineKeyboard().webApp('Open AI Habit Quest', buttonUrl)
+        ? new InlineKeyboard().webApp(isRu ? 'Открыть AI Habit Quest' : 'Open AI Habit Quest', buttonUrl)
         : undefined;
       await ctx.reply(
-        ctx.from?.language_code?.startsWith('ru')
-          ? 'Привет! Я помогу выстроить привычки шаг за шагом. Нажми кнопку ниже, чтобы открыть приложение.'
-          : 'Hi! I will help you build habits step by step. Tap the button below to open the app.',
-        { reply_markup: kb },
+        isRu
+          ? '👋 Привет! Это <b>AI Habit Quest</b> — твой геймифицированный напарник по привычкам.\n\n' +
+            '• Выбираешь цель — спорт, учёба, дисциплина или своя.\n' +
+            '• Получаешь 7-дневный план из маленьких шагов.\n' +
+            '• Закрываешь задания — копишь XP, держишь streak.\n\n' +
+            'Жми кнопку ниже, чтобы начать.'
+          : '👋 Hi! This is <b>AI Habit Quest</b> — your gamified habit partner.\n\n' +
+            '• Pick a goal: sport, study, discipline, or custom.\n' +
+            '• Get a 7-day plan of small steps.\n' +
+            '• Tick them off — earn XP, keep your streak.\n\n' +
+            'Tap the button below to start.',
+        { reply_markup: kb, parse_mode: 'HTML' },
       );
     });
 
     this.bot.command('help', async (ctx) => {
-      await ctx.reply('Available commands: /start, /help, /feedback <text>');
+      const isRu = ctx.from?.language_code?.startsWith('ru');
+      await ctx.reply(
+        isRu
+          ? 'Команды:\n/start — открыть Mini App\n/help — это сообщение\n/feedback <текст> — отправить фидбек'
+          : 'Commands:\n/start — open Mini App\n/help — this message\n/feedback <text> — send feedback',
+      );
     });
 
     this.bot.command('feedback', async (ctx) => {
@@ -49,6 +68,48 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
         : null;
       await this.prisma.feedback.create({ data: { userId: user?.id ?? null, message: text } });
       await ctx.reply('Thanks — your feedback has been recorded.');
+    });
+
+    // -----------------------------------------------------------------------
+    // Telegram Stars payment flow
+    // -----------------------------------------------------------------------
+    // 1) Pre-checkout: must approve within 10s, else Telegram cancels.
+    this.bot.on('pre_checkout_query', async (ctx) => {
+      try {
+        await ctx.answerPreCheckoutQuery(true);
+      } catch (err) {
+        this.logger.warn(`pre_checkout_query failed: ${(err as Error).message}`);
+      }
+    });
+
+    // 2) Successful payment: upgrade user to Premium.
+    this.bot.on(':successful_payment', async (ctx) => {
+      const pay = ctx.message?.successful_payment;
+      const telegramId = ctx.from?.id;
+      if (!pay || !telegramId) return;
+      this.logger.log(
+        `Stars payment: chat=${telegramId} amount=${pay.total_amount} ${pay.currency} payload=${pay.invoice_payload}`,
+      );
+      try {
+        await this.payments.handleStarsSuccessFromBot({
+          telegramId: BigInt(telegramId),
+          invoicePayload: pay.invoice_payload,
+          stars: pay.total_amount,
+          currency: pay.currency,
+          telegramPaymentChargeId: pay.telegram_payment_charge_id,
+        });
+        const isRu = ctx.from?.language_code?.startsWith('ru');
+        await ctx.reply(
+          isRu
+            ? '🎉 Premium активирован. Открой Mini App — теперь у тебя безлимит целей, AI-планы на 30 дней и расширенная статистика.'
+            : '🎉 Premium activated. Open the Mini App — unlimited goals, 30-day AI plans and advanced stats are now yours.',
+        );
+      } catch (err) {
+        this.logger.error(`Failed to apply Stars payment: ${(err as Error).message}`);
+        await ctx.reply(
+          'Платёж получен, но активация Premium не сработала. Напиши /feedback — разберёмся.',
+        );
+      }
     });
 
     this.bot.catch((err) => this.logger.error(`Bot error: ${err}`));
