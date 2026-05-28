@@ -121,7 +121,9 @@ const dict = {
   },
 } as const;
 
-type Dict = typeof dict.ru;
+// Union of both language shapes — keeps `as const` literal-types for
+// downstream type safety while letting the function return either language.
+type Dict = (typeof dict)[Lang];
 
 export function t(lang: Lang): Dict {
   return dict[lang];
