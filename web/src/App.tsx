@@ -119,7 +119,6 @@ export function App() {
         <Today
           lang={lang}
           user={user}
-          goal={activeGoal}
           activeGoalsCount={(goals ?? []).filter((g) => g.status === 'active').length}
           onUserChange={(u) => setUser(u)}
           onPremiumClick={() => setSubscriptionOpen(true)}

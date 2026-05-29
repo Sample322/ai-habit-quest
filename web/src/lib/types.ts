@@ -41,6 +41,8 @@ export interface Goal {
 export interface DailyTask {
   id: string;
   habitId: string;
+  goalId: string;
+  goalTitle: string;
   title: string;
   doneAt: string | null;
   xpAwarded: number;

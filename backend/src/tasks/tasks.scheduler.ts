@@ -15,13 +15,12 @@ export class TasksScheduler {
 
   // Run every hour — for any timezone that just rolled past midnight, this materialises today's tasks.
   @Cron(CronExpression.EVERY_HOUR)
-  async materialiseDailyTasks() {
+  async materialiseDailyTasks(): Promise<void> {
     const users = await this.prisma.user.findMany({ select: { id: true, timezone: true } });
     let materialised = 0;
     for (const u of users) {
       const date = todayLocalDate(u.timezone);
-      const rows = await this.tasks.materialiseForUser(u.id, date);
-      if (rows.length > 0) materialised += rows.length;
+      materialised += await this.tasks.materialiseForUser(u.id, date);
     }
     if (materialised > 0) {
       this.logger.log(`Materialised ${materialised} daily tasks across users`);

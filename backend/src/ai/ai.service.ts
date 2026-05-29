@@ -21,6 +21,9 @@ export class AiService {
     try {
       const { data } = await this.http.post<AiPlanResponse>('/generate-plan', req);
       if (data && Array.isArray(data.schedule) && data.schedule.length > 0) {
+        this.logger.log(
+          `ai-service responded provider=${data.provider} schedule_days=${data.schedule.length} habits=${data.habits?.length ?? 0} for "${req.goalTitle}"`,
+        );
         return data;
       }
       this.logger.warn('ai-service returned empty plan, using local stub');

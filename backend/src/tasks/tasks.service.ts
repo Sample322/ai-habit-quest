@@ -1,11 +1,33 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DailyTask, GoalStatus } from '@prisma/client';
+import { DailyTask, Goal, GoalStatus, Habit, Plan } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { AiPlanResponse } from '../ai/ai.types';
 
 const XP_PER_TASK = 10;
+const MS_PER_DAY = 86_400_000;
+
+type GoalWithPlanAndHabits = Goal & {
+  habits: Habit[];
+  plan: Plan | null;
+};
+
+type DailyTaskWithRelations = DailyTask & {
+  habit: Habit & { goal: Goal };
+};
+
+export interface DailyTaskView {
+  id: string;
+  habitId: string;
+  goalId: string;
+  goalTitle: string;
+  title: string;
+  doneAt: string | null;
+  xpAwarded: number;
+  localDate: string;
+  createdAt: string;
+}
 
 @Injectable()
 export class TasksService {
@@ -14,21 +36,25 @@ export class TasksService {
     private readonly gamification: GamificationService,
   ) {}
 
-  async listToday(userId: string): Promise<DailyTask[]> {
+  async listToday(userId: string): Promise<DailyTaskView[]> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const localDate = todayLocalDate(user.timezone);
 
-    let tasks = await this.prisma.dailyTask.findMany({
-      where: { userId, localDate },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (tasks.length === 0) {
-      tasks = await this.materialiseForUser(userId, localDate);
+    let rows = await this.fetchTodayRows(userId, localDate);
+    if (rows.length === 0) {
+      await this.materialiseForUser(userId, localDate);
+      rows = await this.fetchTodayRows(userId, localDate);
     }
-    return tasks;
+    return rows.map(toTaskView);
   }
 
-  async toggle(userId: string, taskId: string): Promise<{ task: DailyTask; user: { streakCurrent: number; xpTotal: number; level: number } }> {
+  async toggle(
+    userId: string,
+    taskId: string,
+  ): Promise<{
+    task: DailyTaskView;
+    user: { streakCurrent: number; xpTotal: number; level: number };
+  }> {
     const task = await this.prisma.dailyTask.findFirst({ where: { id: taskId, userId } });
     if (!task) throw new NotFoundException('Task not found');
 
@@ -37,10 +63,10 @@ export class TasksService {
     const localTaskDate = task.localDate.toISOString().slice(0, 10);
     const localTodayStr = localToday.toISOString().slice(0, 10);
     if (localTaskDate !== localTodayStr) {
-      throw new BadRequestException('Only today\'s tasks can be toggled');
+      throw new BadRequestException("Only today's tasks can be toggled");
     }
 
-    const updated = await this.prisma.dailyTask.update({
+    await this.prisma.dailyTask.update({
       where: { id: task.id },
       data: {
         doneAt: task.doneAt ? null : new Date(),
@@ -50,8 +76,13 @@ export class TasksService {
 
     const gamification = await this.gamification.recompute(userId);
 
+    const updated = await this.prisma.dailyTask.findUniqueOrThrow({
+      where: { id: task.id },
+      include: { habit: { include: { goal: true } } },
+    });
+
     return {
-      task: updated,
+      task: toTaskView(updated),
       user: {
         streakCurrent: gamification.streakCurrent,
         xpTotal: gamification.xpTotal,
@@ -61,42 +92,95 @@ export class TasksService {
   }
 
   /**
-   * Materialise the next day's tasks for a single user (used on first read and by cron).
-   * Idempotent: relies on the (habitId, localDate) unique constraint.
+   * Materialise today's tasks across ALL of the user's active goals.
+   *
+   * Premium users can hold multiple active goals simultaneously; each goal
+   * contributes its (up to 3) habits as separate daily tasks. The
+   * `(habitId, localDate)` unique constraint makes the operation idempotent
+   * if called multiple times on the same day.
    */
-  async materialiseForUser(userId: string, localDate: Date): Promise<DailyTask[]> {
-    const activeGoal = await this.prisma.goal.findFirst({
+  async materialiseForUser(userId: string, localDate: Date): Promise<number> {
+    const activeGoals = await this.prisma.goal.findMany({
       where: { userId, status: GoalStatus.active },
-      orderBy: { createdAt: 'desc' },
-      include: { habits: { orderBy: { position: 'asc' } }, plan: true },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        habits: { orderBy: { position: 'asc' } },
+        plan: true,
+      },
     });
-    if (!activeGoal || !activeGoal.plan) return [];
 
-    const plan = activeGoal.plan.payload as unknown as AiPlanResponse;
-    const dayIndex = ((Math.floor((Date.now() - activeGoal.startedAt.getTime()) / 86_400_000)) % plan.horizonDays + plan.horizonDays) % plan.horizonDays;
-    const day = plan.schedule[dayIndex] ?? plan.schedule[0];
+    const inserts: { userId: string; habitId: string; localDate: Date; title: string }[] = [];
+    for (const goal of activeGoals) {
+      inserts.push(...buildDailyTaskInserts(userId, goal, localDate));
+    }
+    if (inserts.length === 0) return 0;
 
-    const habits = activeGoal.habits.slice(0, 3);
-    if (habits.length === 0) return [];
+    const result = await this.prisma.dailyTask.createMany({
+      data: inserts,
+      skipDuplicates: true,
+    });
+    return result.count;
+  }
 
-    const data = habits.map((habit, idx) => ({
-      userId,
-      habitId: habit.id,
-      localDate,
-      title: day.tasks[idx] ?? habit.title,
-    }));
-
-    await this.prisma.dailyTask.createMany({ data, skipDuplicates: true });
+  private fetchTodayRows(userId: string, localDate: Date): Promise<DailyTaskWithRelations[]> {
     return this.prisma.dailyTask.findMany({
       where: { userId, localDate },
       orderBy: { createdAt: 'asc' },
+      include: { habit: { include: { goal: true } } },
     });
   }
 }
 
+function buildDailyTaskInserts(
+  userId: string,
+  goal: GoalWithPlanAndHabits,
+  localDate: Date,
+): { userId: string; habitId: string; localDate: Date; title: string }[] {
+  if (!goal.plan) return [];
+  const plan = goal.plan.payload as unknown as AiPlanResponse;
+  if (!plan?.schedule?.length) return [];
+
+  const dayIndex = computeDayIndex(goal.startedAt, plan.horizonDays);
+  const day = plan.schedule[dayIndex] ?? plan.schedule[0];
+  const habits = goal.habits.slice(0, 3);
+  if (habits.length === 0) return [];
+
+  return habits.map((habit, idx) => ({
+    userId,
+    habitId: habit.id,
+    localDate,
+    title: day.tasks[idx] ?? habit.title,
+  }));
+}
+
+function toTaskView(row: DailyTaskWithRelations): DailyTaskView {
+  return {
+    id: row.id,
+    habitId: row.habitId,
+    goalId: row.habit.goalId,
+    goalTitle: row.habit.goal.title,
+    title: row.title,
+    doneAt: row.doneAt ? row.doneAt.toISOString() : null,
+    xpAwarded: row.xpAwarded,
+    localDate: row.localDate.toISOString().slice(0, 10),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function computeDayIndex(startedAt: Date, horizonDays: number): number {
+  if (horizonDays <= 0) return 0;
+  const offsetDays = Math.floor((Date.now() - startedAt.getTime()) / MS_PER_DAY);
+  return ((offsetDays % horizonDays) + horizonDays) % horizonDays;
+}
+
 export function todayLocalDate(timezone: string): Date {
   // Compute "today" in the user's timezone, returned as a UTC date with the local Y-M-D.
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
   const parts = fmt.formatToParts(new Date());
   const y = parts.find((p) => p.type === 'year')!.value;
   const m = parts.find((p) => p.type === 'month')!.value;

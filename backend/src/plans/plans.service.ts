@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { GoalCategory } from '@prisma/client';
 
@@ -8,6 +8,8 @@ import { AiPlanResponse, AiPlanRequest } from '../ai/ai.types';
 
 @Injectable()
 export class PlansService {
+  private readonly logger = new Logger(PlansService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
@@ -17,19 +19,34 @@ export class PlansService {
     goalId: string,
     req: { category: GoalCategory; goalTitle: string; horizonDays: number; language: 'ru' | 'en' },
   ): Promise<AiPlanResponse> {
-    const cacheKey = hashKey([req.category, req.horizonDays, req.language].join('|'));
+    // Cache key includes the normalized goalTitle so different goals get
+    // different AI plans, AND so a previously cached `stub` fallback never
+    // gets returned for a brand-new goal title.
+    const cacheKey = buildCacheKey(req);
     const cached = await this.prisma.planCache.findUnique({ where: { cacheKey } });
 
-    const plan: AiPlanResponse = cached
-      ? (cached.payload as unknown as AiPlanResponse)
-      : await this.ai.generatePlan({
-          category: req.category as AiPlanRequest['category'],
-          goalTitle: req.goalTitle,
-          horizonDays: req.horizonDays,
-          language: req.language,
-        });
+    let plan: AiPlanResponse;
+    if (cached) {
+      plan = cached.payload as unknown as AiPlanResponse;
+      this.logger.log(
+        `plan cache HIT goal=${goalId} title="${req.goalTitle}" provider=${plan.provider}`,
+      );
+    } else {
+      plan = await this.ai.generatePlan({
+        category: req.category as AiPlanRequest['category'],
+        goalTitle: req.goalTitle,
+        horizonDays: req.horizonDays,
+        language: req.language,
+      });
+      this.logger.log(
+        `plan generated goal=${goalId} title="${req.goalTitle}" provider=${plan.provider}`,
+      );
+    }
 
-    if (!cached) {
+    // Only cache real (non-stub) plans. A stub response means the upstream
+    // AI provider just failed — caching it would lock the goal into the
+    // fallback forever, which is exactly the bug we're avoiding here.
+    if (!cached && plan.provider !== 'stub') {
       await this.prisma.planCache.create({
         data: {
           cacheKey,
@@ -83,6 +100,16 @@ export class PlansService {
     if (!plan || plan.goal.userId !== userId) throw new NotFoundException('Plan not found');
     return plan.payload as unknown as AiPlanResponse;
   }
+}
+
+function buildCacheKey(req: {
+  category: GoalCategory;
+  goalTitle: string;
+  horizonDays: number;
+  language: 'ru' | 'en';
+}): string {
+  const normalisedTitle = req.goalTitle.trim().toLowerCase().slice(0, 80);
+  return hashKey([req.category, req.horizonDays, req.language, normalisedTitle].join('|'));
 }
 
 function hashKey(input: string): string {
