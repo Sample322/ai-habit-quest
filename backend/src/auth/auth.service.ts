@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
+import { User } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { envString } from '../config/env';
@@ -17,6 +18,10 @@ export interface AuthResult {
     isPremium: boolean;
   };
 }
+
+// Admins (listed in ADMIN_TELEGRAM_IDS) get Premium that effectively never
+// expires. 2099 is safely below any JS Date overflow and obvious in DB.
+const ADMIN_PREMIUM_UNTIL = new Date('2099-12-31T23:59:59Z');
 
 @Injectable()
 export class AuthService {
@@ -56,7 +61,7 @@ export class AuthService {
       ? parsed.startParam.slice(4)
       : undefined;
 
-    const user = await this.prisma.user.upsert({
+    const upserted = await this.prisma.user.upsert({
       where: { telegramId },
       update: {
         username: parsed.user.username ?? null,
@@ -75,6 +80,8 @@ export class AuthService {
       },
     });
 
+    const user = await this.applyAdminPremiumIfNeeded(upserted, telegramId);
+
     const token = await this.jwt.signAsync({ sub: user.id });
 
     return {
@@ -89,6 +96,31 @@ export class AuthService {
       },
     };
   }
+
+  /**
+   * If telegramId is listed in ADMIN_TELEGRAM_IDS, ensure the user has
+   * Premium with the admin sentinel expiration. Idempotent — only touches
+   * the DB when the state would actually change.
+   */
+  private async applyAdminPremiumIfNeeded(user: User, telegramId: bigint): Promise<User> {
+    const adminIds = parseAdminTelegramIds(envString('ADMIN_TELEGRAM_IDS', ''));
+    if (!adminIds.has(telegramId)) return user;
+
+    const alreadyCorrect =
+      user.isPremium &&
+      user.premiumUntil !== null &&
+      user.premiumUntil.getTime() === ADMIN_PREMIUM_UNTIL.getTime();
+    if (alreadyCorrect) return user;
+
+    this.logger.log(`Granting infinite admin Premium to telegramId=${telegramId}`);
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isPremium: true,
+        premiumUntil: ADMIN_PREMIUM_UNTIL,
+      },
+    });
+  }
 }
 
 function normaliseLang(code: string | undefined): string {
@@ -99,4 +131,26 @@ function normaliseLang(code: string | undefined): string {
 
 function generateReferralCode(): string {
   return randomBytes(6).toString('base64url');
+}
+
+/**
+ * Parse `ADMIN_TELEGRAM_IDS` into a Set of bigint Telegram user IDs.
+ * Accepts a comma-separated list of decimal numbers — e.g.
+ * `888007035,123456789`. Whitespace and empty entries are tolerated.
+ * Invalid entries are silently skipped so a single typo cannot lock
+ * legitimate users out of auth.
+ */
+function parseAdminTelegramIds(raw: string): Set<bigint> {
+  const out = new Set<bigint>();
+  if (!raw) return out;
+  for (const piece of raw.split(',')) {
+    const trimmed = piece.trim();
+    if (!trimmed) continue;
+    try {
+      out.add(BigInt(trimmed));
+    } catch {
+      // ignore malformed entries — we don't want a typo to lock everyone out
+    }
+  }
+  return out;
 }
