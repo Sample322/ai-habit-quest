@@ -134,6 +134,7 @@ export function App() {
       {subscriptionOpen && (
         <Subscription
           lang={lang}
+          user={user}
           onClose={() => setSubscriptionOpen(false)}
           onActivated={async () => {
             setSubscriptionOpen(false);
@@ -150,7 +151,17 @@ function Header({ user, lang }: { user: User; lang: Lang }) {
   return (
     <header className="flex items-center justify-between mb-5">
       <div>
-        <div className="text-lg font-semibold">{i.appTitle}</div>
+        <div className="text-lg font-semibold flex items-center gap-2">
+          <span>{i.appTitle}</span>
+          {user.isPremium && (
+            <span
+              className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/20 text-accent"
+              title={i.subscription.activeTitle}
+            >
+              ⭐ Premium
+            </span>
+          )}
+        </div>
         <div className="text-xs text-muted">{user.firstName ?? user.username ?? ''}</div>
       </div>
       <div className="text-right text-xs text-muted">
