@@ -20,6 +20,7 @@ export function App() {
   const [goals, setGoals] = useState<Goal[] | null>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
 
   const i = t(lang);
 
@@ -119,8 +120,10 @@ export function App() {
           lang={lang}
           user={user}
           goal={activeGoal}
+          activeGoalsCount={(goals ?? []).filter((g) => g.status === 'active').length}
           onUserChange={(u) => setUser(u)}
           onPremiumClick={() => setSubscriptionOpen(true)}
+          onAddGoal={() => setGoalCreatorOpen(true)}
         />
       )}
 
@@ -142,6 +145,45 @@ export function App() {
           }}
         />
       )}
+
+      {goalCreatorOpen && (
+        <GoalCreatorModal
+          lang={lang}
+          onClose={() => setGoalCreatorOpen(false)}
+          onCreated={async () => {
+            setGoalCreatorOpen(false);
+            await refreshUser();
+            await refreshGoals();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function GoalCreatorModal({
+  lang,
+  onClose,
+  onCreated,
+}: {
+  lang: Lang;
+  onClose: () => void;
+  onCreated: () => Promise<void> | void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg w-full max-w-xl rounded-t-3xl sm:rounded-card p-6 m-0 sm:my-6 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-end mb-2">
+          <button onClick={onClose} className="text-muted text-xl leading-none px-2">×</button>
+        </div>
+        <Onboarding lang={lang} onCreated={onCreated} />
+      </div>
     </div>
   );
 }

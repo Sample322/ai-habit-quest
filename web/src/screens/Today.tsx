@@ -5,19 +5,25 @@ import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { DailyTask, Goal, User } from '../lib/types';
 
+interface TodayProps {
+  lang: Lang;
+  user: User;
+  goal: Goal;
+  activeGoalsCount: number;
+  onUserChange: (u: User) => void;
+  onPremiumClick: () => void;
+  onAddGoal: () => void;
+}
+
 export function Today({
   lang,
   user,
   goal,
+  activeGoalsCount,
   onUserChange,
   onPremiumClick,
-}: {
-  lang: Lang;
-  user: User;
-  goal: Goal;
-  onUserChange: (u: User) => void;
-  onPremiumClick: () => void;
-}) {
+  onAddGoal,
+}: TodayProps) {
   const i = t(lang);
   const [tasks, setTasks] = useState<DailyTask[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -55,6 +61,11 @@ export function Today({
           <div>
             <div className="text-xs uppercase tracking-wider text-muted">{i.today.title}</div>
             <div className="text-xl font-semibold mt-1">{goal.title}</div>
+            {activeGoalsCount > 1 && (
+              <div className="text-[11px] text-muted mt-1">
+                {activeGoalsCount} {i.today.goalsActiveCount}
+              </div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-accent">{done}/{total || '·'}</div>
@@ -100,6 +111,13 @@ export function Today({
           <div className="text-xs text-muted mt-1">{i.common.tryPremium}</div>
         </button>
       )}
+
+      <button
+        onClick={onAddGoal}
+        className="w-full rounded-card border border-dashed border-white/15 hover:border-accent text-muted hover:text-accent py-3 px-4 text-sm font-medium transition"
+      >
+        + {i.today.addGoal}
+      </button>
     </div>
   );
 }

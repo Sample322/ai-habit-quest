@@ -26,6 +26,8 @@ const dict = {
       level: 'Уровень',
       xp: 'XP',
       premiumCta: 'Открой Premium — план на 30 дней и AI-коучинг',
+      addGoal: 'Создать ещё одну цель',
+      goalsActiveCount: 'активных целей',
     },
     progress: {
       title: 'Прогресс',
@@ -91,6 +93,8 @@ const dict = {
       level: 'Level',
       xp: 'XP',
       premiumCta: 'Unlock Premium — 30-day AI plan and coaching',
+      addGoal: 'Add another goal',
+      goalsActiveCount: 'active goals',
     },
     progress: {
       title: 'Progress',
