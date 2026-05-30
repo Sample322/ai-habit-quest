@@ -2,6 +2,41 @@
 
 > **Read this first** if you're picking up the project. It's a concise pointer to current state, live URLs, what works, what's broken, and what to do next.
 
+## Latest update — 2026-05-31 (session 6)
+
+**AI stub bug fully resolved & verified end-to-end.** Root causes were: (1) stale
+`AI_SERVICE_URL` (`…e620…` → ENOTFOUND) — env corrected to `71a2`; (2) OpenRouter
+routing to geo-blocking provider **WandB** (403 unsupported_country) — added
+`provider.ignore`; (3) OpenRouter **429** rate-limits from shared upstream providers
+(Groq/Novita/DeepInfra) on the cheap `llama-3.1-8b-instruct` model — added retries
+(`OPENAI_MAX_ATTEMPTS=5`). The OpenRouter account is **paid** (`is_free_tier:false`,
+~$5 of $20 left); 429s are upstream-provider shared limits, not balance. After fixes:
+`/ai/diag` 10/10 `openai`, 30-day plans 3/3.
+
+**Shipped this session (all live, all deploys succeeded):**
+- `backend` axios timeout 30→90s; new diagnostic `GET /ai/diag` (backend→ai-service probe).
+- `Dockerfile`: `npm prune --omit=dev` → slim runtime image so the registry pull fits
+  Timeweb's deploy window (fixes the chronic "Build succeeded but container didn't start").
+- `ai-service`: `provider.ignore` + retry loop on 403/429/5xx.
+- `web`: staged **GoalCreating** progress screen + 100s AbortController timeout (replaces the
+  frozen "..." during the 7-60s synchronous generation).
+- `bot`: `/start` button `.webApp()`→`.url()` (fixes 400 BUTTON_URL_INVALID).
+- **NEW: `POST /goals/:id/regenerate-plan`** + per-goal "regenerate" button on Today.
+  Safely replaces a stub plan with a real one (generate-first, only replace if non-stub;
+  re-materialise + gamification recompute). Verified: the owner's stub goal
+  "Убираться в комнате…" was regenerated stub→openai with real title-specific habits/tasks.
+
+**Verified via minted HS256 JWT** (using the live `JWT_SECRET`) against prod — which itself
+proves ⚠ `JWT_SECRET`/`ADMIN_BASIC_PASSWORD` are still dev placeholders and `NODE_ENV=development`;
+**rotate before public launch** (owner action in the Timeweb panel).
+
+**How to drive Timeweb (MCP is non-functional — `spawn npx ENOENT`, no log/deploy tools):**
+use the REST API with `TIMEWEB_TOKEN` from `~/.claude.json`. Apps: backend `200081`,
+ai-service `201299`, web `201439`. `GET /api/v1/apps/{id}/logs?limit=2000`,
+`GET …/deploys`, `GET …/deploy/{deployId}/logs`, `POST …/deploy` body `{"commit_sha":"<40hex>"}`.
+
+---
+
 ## Current status — one paragraph
 
 Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (backend NestJS, web React+Vite, ai-service Python FastAPI) plus a Managed PostgreSQL, fed by GitHub auto-deploy from `Sample322/ai-habit-quest@master`. The **day-1 user loop works end-to-end** in Telegram: auth via Telegram WebApp `initData` → goal creation → 7-day plan → daily tasks with streak/XP → goal deletion with cascade + gamification recompute. Two outstanding issues block "Phase 2 done": **(a)** real AI plans via OpenRouter currently fall back to a deterministic stub for unclear reasons — diagnostic logging is shipped but a fresh log capture is needed, **(b)** Timeweb's deploy queue periodically stalls and required manual `Stop → Start` or App recreation more than once. CORS, JWT auth, admin Premium, multi-goal aggregation, the AI cache key, and the "white screen" build bug have all been fixed.
