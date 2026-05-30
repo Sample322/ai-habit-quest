@@ -18,5 +18,6 @@ FROM nginx:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1
+# NO HEALTHCHECK directive — Timeweb Cloud Apps injects its own healthcheck
+# based on the path you configure in the UI. Shipping a HEALTHCHECK here
+# fights with that injection and leaves the deploy stuck in "starting".
