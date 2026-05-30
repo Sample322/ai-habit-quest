@@ -19,8 +19,17 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Build with the full toolchain, then strip dev dependencies from node_modules
+# so the RUNTIME image stays small. The big offenders (typescript, webpack via
+# @nestjs/cli, ts-loader, ts-node, @types) are dev-only and must not ship —
+# a bloated image makes Timeweb's registry pull exceed the deploy window and
+# the deploy is marked "failed" even though the container starts fine.
+# `prisma` is a prod dependency (needed for `db push` at startup), so it
+# survives the prune; we regenerate the client afterwards to be safe.
 RUN npx prisma generate \
-  && npm run build
+  && npm run build \
+  && npm prune --omit=dev \
+  && npx prisma generate
 
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
