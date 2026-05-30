@@ -62,6 +62,15 @@ const dict = {
       done: 'Готово',
       tryPremium: 'Открыть Premium',
     },
+    deleteGoal: {
+      iconLabel: 'Удалить цель',
+      title: 'Удалить цель?',
+      bodyHasProgress: 'Ты потеряешь {xp} XP, заработанных в этой цели ({completed} выполненных задач). Действие нельзя отменить.',
+      bodyNoProgress: 'В этой цели пока нет выполненных задач, удаление пройдёт без потери XP. Действие нельзя отменить.',
+      confirm: 'Удалить',
+      cancel: 'Не сейчас',
+      toastDeleted: 'Цель «{title}» удалена · −{xp} XP',
+    },
     errors: {
       auth: 'Не удалось войти в Telegram Mini App.',
       generic: 'Что-то пошло не так. Попробуй ещё раз.',
@@ -128,6 +137,15 @@ const dict = {
       cancel: 'Cancel',
       done: 'Done',
       tryPremium: 'Unlock Premium',
+    },
+    deleteGoal: {
+      iconLabel: 'Delete goal',
+      title: 'Delete this goal?',
+      bodyHasProgress: 'You will lose {xp} XP earned on this goal ({completed} completed tasks). This cannot be undone.',
+      bodyNoProgress: 'No tasks have been completed for this goal yet, deletion will not cost any XP. This cannot be undone.',
+      confirm: 'Delete',
+      cancel: 'Not now',
+      toastDeleted: 'Goal "{title}" removed · −{xp} XP',
     },
     errors: {
       auth: 'Could not authenticate Telegram Mini App.',

@@ -92,6 +92,20 @@ export class TasksService {
   }
 
   /**
+   * Convenience wrapper that resolves the user's timezone and calls
+   * `materialiseForUser` for "today". Call this right after a new goal is
+   * created so its tasks show up in the Today view immediately, even when
+   * other goals already materialised the day's tasks earlier.
+   */
+  async materialiseTodayForUser(userId: string): Promise<number> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    return this.materialiseForUser(userId, todayLocalDate(user.timezone));
+  }
+
+  /**
    * Materialise today's tasks across ALL of the user's active goals.
    *
    * Premium users can hold multiple active goals simultaneously; each goal

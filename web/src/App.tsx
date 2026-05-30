@@ -9,6 +9,7 @@ import { Today } from './screens/Today';
 import { Progress } from './screens/Progress';
 import { Subscription } from './screens/Subscription';
 import { BottomNav, type Tab } from './components/BottomNav';
+import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -21,6 +22,8 @@ export function App() {
   const [tab, setTab] = useState<Tab>('today');
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
+  const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const i = t(lang);
 
@@ -123,6 +126,7 @@ export function App() {
           onUserChange={(u) => setUser(u)}
           onPremiumClick={() => setSubscriptionOpen(true)}
           onAddGoal={() => setGoalCreatorOpen(true)}
+          onDeleteGoal={(id, title) => setDeletingGoal({ id, title })}
         />
       )}
 
@@ -155,6 +159,31 @@ export function App() {
             await refreshGoals();
           }}
         />
+      )}
+
+      {deletingGoal && (
+        <ConfirmDeleteGoalModal
+          lang={lang}
+          goalId={deletingGoal.id}
+          goalTitle={deletingGoal.title}
+          onClose={() => setDeletingGoal(null)}
+          onDeleted={async (xpLost, goalTitle) => {
+            setDeletingGoal(null);
+            await refreshUser();
+            await refreshGoals();
+            const tpl = i.deleteGoal.toastDeleted;
+            setToast(tpl.replace('{title}', goalTitle).replace('{xp}', String(xpLost)));
+            setTimeout(() => setToast(null), 4000);
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 inset-x-0 z-[60] flex justify-center px-4 pointer-events-none">
+          <div className="bg-bg/95 border border-white/10 rounded-card px-4 py-3 text-sm shadow-lg max-w-md w-full text-center">
+            {toast}
+          </div>
+        </div>
       )}
     </div>
   );

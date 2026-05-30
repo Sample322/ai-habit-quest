@@ -63,7 +63,22 @@ export const api = {
 
   goal: (id: string) => request<Goal & { plan: { payload: Plan } | null }>(`/goals/${id}`),
 
-  archiveGoal: (id: string) => request<{ ok: true }>(`/goals/${id}`, { method: 'DELETE' }),
+  previewDeleteGoal: (id: string) =>
+    request<{
+      goalId: string;
+      goalTitle: string;
+      completedTasks: number;
+      pendingTasks: number;
+      xpToLose: number;
+    }>(`/goals/${id}/delete-preview`),
+
+  deleteGoal: (id: string) =>
+    request<{
+      deletedGoalId: string;
+      goalTitle: string;
+      xpLost: number;
+      user: { streakCurrent: number; streakBest: number; xpTotal: number; level: number };
+    }>(`/goals/${id}`, { method: 'DELETE' }),
 
   plan: (goalId: string) => request<Plan>(`/goals/${goalId}/plan`),
 

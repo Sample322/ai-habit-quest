@@ -12,6 +12,7 @@ interface TodayProps {
   onUserChange: (u: User) => void;
   onPremiumClick: () => void;
   onAddGoal: () => void;
+  onDeleteGoal: (goalId: string, goalTitle: string) => void;
 }
 
 interface GoalGroup {
@@ -30,6 +31,7 @@ export function Today({
   onUserChange,
   onPremiumClick,
   onAddGoal,
+  onDeleteGoal,
 }: TodayProps) {
   const i = t(lang);
   const [tasks, setTasks] = useState<DailyTask[] | null>(null);
@@ -84,8 +86,10 @@ export function Today({
         groups.map((group) => (
           <GoalSection
             key={group.goalId}
+            lang={lang}
             group={group}
             onToggle={toggle}
+            onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
             busyId={busy}
           />
         ))}
@@ -159,21 +163,35 @@ function HeaderCard({
 }
 
 function GoalSection({
+  lang,
   group,
   onToggle,
+  onDelete,
   busyId,
 }: {
+  lang: Lang;
   group: GoalGroup;
   onToggle: (id: string) => void;
+  onDelete: () => void;
   busyId: string | null;
 }) {
+  const i = t(lang);
   return (
     <section className="space-y-2">
-      <div className="flex items-baseline justify-between px-1">
-        <div className="text-sm font-semibold tracking-tight truncate">{group.goalTitle}</div>
-        <div className="text-[11px] text-muted tabular-nums shrink-0 ml-2">
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <div className="text-sm font-semibold tracking-tight truncate flex-1">{group.goalTitle}</div>
+        <div className="text-[11px] text-muted tabular-nums shrink-0">
           {group.done}/{group.total}
         </div>
+        <button
+          onClick={onDelete}
+          aria-label={i.deleteGoal.iconLabel}
+          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-danger hover:bg-danger/10 transition"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h8M5 3V2a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v1M3 3l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L9 3" />
+          </svg>
+        </button>
       </div>
       <ul className="space-y-2">
         {group.tasks.map((task) => (
