@@ -9,17 +9,68 @@ import { localStubPlan } from './stub-plans';
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly http: AxiosInstance;
+  private readonly baseUrl: string;
 
   constructor() {
-    const baseUrl = envString('AI_SERVICE_URL', 'http://ai-service:8000');
-    this.logger.log(`AI client configured baseURL=${baseUrl}`);
+    // No silent localhost default in production: on Timeweb each app has its
+    // own public domain, so a missing/stale AI_SERVICE_URL is the #1 cause of
+    // plans silently falling back to the local stub (ENOTFOUND). Surface it.
+    this.baseUrl = envString('AI_SERVICE_URL', 'http://ai-service:8000');
+    this.logger.log(`AI client configured baseURL=${this.baseUrl}`);
     this.http = axios.create({
-      baseURL: baseUrl,
-      timeout: 30_000,
+      baseURL: this.baseUrl,
+      // ai-service budgets up to 60s for the upstream LLM call; we must wait
+      // longer than that or we cut off legitimate (slow) generations and fall
+      // back to the stub. 90s > ai-service's own 60s ceiling.
+      timeout: 90_000,
       // Don't auto-throw on 4xx/5xx so we can log the actual server reply
       // when the upstream service returned an error envelope instead of a plan.
       validateStatus: () => true,
     });
+  }
+
+  /**
+   * Connectivity + end-to-end diagnostic for the backend -> ai-service path.
+   * No secrets are returned. Lets us confirm — without creating a goal — that
+   * the backend can reach ai-service and get a real (non-stub) plan back.
+   */
+  async probe(): Promise<{
+    baseUrl: string;
+    healthz: { ok: boolean; status?: number; body?: unknown; error?: string };
+    sample: { ok: boolean; provider?: string; scheduleDays?: number; ms: number; error?: string };
+  }> {
+    const healthz: { ok: boolean; status?: number; body?: unknown; error?: string } = { ok: false };
+    try {
+      const r = await this.http.get('/healthz', { timeout: 10_000 });
+      healthz.ok = r.status < 400;
+      healthz.status = r.status;
+      healthz.body = r.data;
+    } catch (err) {
+      healthz.error = (err as Error).message;
+    }
+
+    const started = Date.now();
+    const sample: { ok: boolean; provider?: string; scheduleDays?: number; ms: number; error?: string } = {
+      ok: false,
+      ms: 0,
+    };
+    try {
+      const plan = await this.generatePlan({
+        category: 'custom',
+        goalTitle: 'diagnostic ping',
+        horizonDays: 7,
+        level: 'beginner',
+        language: 'en',
+      });
+      sample.ok = plan.provider !== 'stub';
+      sample.provider = plan.provider;
+      sample.scheduleDays = plan.schedule.length;
+    } catch (err) {
+      sample.error = (err as Error).message;
+    }
+    sample.ms = Date.now() - started;
+
+    return { baseUrl: this.baseUrl, healthz, sample };
   }
 
   async generatePlan(req: AiPlanRequest): Promise<AiPlanResponse> {

@@ -19,7 +19,7 @@ export interface AiPlanDay {
 }
 
 export interface AiPlanResponse {
-  provider: 'stub' | 'ollama';
+  provider: 'stub' | 'ollama' | 'openai';
   category: AiPlanCategory;
   horizonDays: number;
   habits: AiPlanHabit[]; // suggested habits to attach to the goal
