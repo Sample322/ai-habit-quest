@@ -13,6 +13,7 @@ sees a broken onboarding.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -44,6 +45,12 @@ OPENAI_APP_URL = os.getenv("OPENAI_APP_URL", "https://ai-habit-quest.local")
 OPENROUTER_IGNORE_PROVIDERS = [
     p.strip() for p in os.getenv("OPENROUTER_IGNORE_PROVIDERS", "wandb").split(",") if p.strip()
 ]
+# OpenRouter rotates upstream providers per request, so a 403 (geo-block),
+# 429 (rate-limit) or 5xx usually clears on a retry that lands on a healthy
+# provider. Retrying a few times turns the intermittent stub fallback into a
+# reliable real plan. The backend's axios timeout (90s) leaves room for these.
+OPENAI_MAX_ATTEMPTS = int(os.getenv("OPENAI_MAX_ATTEMPTS", "5"))
+OPENAI_RETRY_DELAY = float(os.getenv("OPENAI_RETRY_DELAY", "1.0"))
 
 # Ollama config (local self-hosted)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
@@ -178,15 +185,47 @@ async def _generate_with_openai(req: PlanRequest) -> PlanResponse:
         "calling openai-compatible: base=%s model=%s key_prefix=%s",
         OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY[:8] if OPENAI_API_KEY else "(empty)",
     )
+    retryable_status = {403, 408, 409, 429, 500, 502, 503, 504}
+    body = None
+    last_detail = "unknown error"
     async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers)
-        if resp.status_code >= 400:
-            logger.error(
-                "openai HTTP %s body=%s",
-                resp.status_code, resp.text[:500],
+        for attempt in range(1, OPENAI_MAX_ATTEMPTS + 1):
+            try:
+                resp = await client.post(
+                    f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers
+                )
+            except httpx.HTTPError as exc:
+                last_detail = f"request error: {exc}"
+                logger.warning(
+                    "openai attempt %d/%d network error: %s",
+                    attempt, OPENAI_MAX_ATTEMPTS, exc,
+                )
+                if attempt < OPENAI_MAX_ATTEMPTS:
+                    await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                    continue
+                raise HTTPException(status_code=502, detail=f"OpenAI {last_detail}") from exc
+
+            if resp.status_code < 400:
+                body = resp.json()
+                break
+
+            last_detail = f"{resp.status_code}: {resp.text[:200]}"
+            logger.warning(
+                "openai attempt %d/%d HTTP %s body=%s",
+                attempt, OPENAI_MAX_ATTEMPTS, resp.status_code, resp.text[:300],
             )
-            raise HTTPException(status_code=502, detail=f"OpenAI API {resp.status_code}: {resp.text[:200]}")
-        body = resp.json()
+            # A retry re-rolls OpenRouter's provider choice, dodging the one that
+            # just geo-blocked (403) or rate-limited (429) us.
+            if resp.status_code in retryable_status and attempt < OPENAI_MAX_ATTEMPTS:
+                await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                continue
+            raise HTTPException(status_code=502, detail=f"OpenAI API {last_detail}")
+
+    if body is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"OpenAI API failed after {OPENAI_MAX_ATTEMPTS} attempts: {last_detail}",
+        )
 
     try:
         content = body["choices"][0]["message"]["content"]
