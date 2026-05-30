@@ -35,6 +35,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 OPENAI_APP_NAME = os.getenv("OPENAI_APP_NAME", "AI Habit Quest")
 OPENAI_APP_URL = os.getenv("OPENAI_APP_URL", "https://ai-habit-quest.local")
+# OpenRouter load-balances a model across several upstream providers. Some of
+# them (e.g. WandB) geo-block the region this service runs in and answer with
+# 403 "unsupported_country_region_territory", which silently degrades us to the
+# stub — intermittently, depending on which provider OpenRouter picked. Tell
+# OpenRouter to never route to those. Comma-separated; extend via env as new
+# blockers show up in the logs.
+OPENROUTER_IGNORE_PROVIDERS = [
+    p.strip() for p in os.getenv("OPENROUTER_IGNORE_PROVIDERS", "wandb").split(",") if p.strip()
+]
 
 # Ollama config (local self-hosted)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
@@ -159,6 +168,11 @@ async def _generate_with_openai(req: PlanRequest) -> PlanResponse:
         "max_tokens": 2000,
         "response_format": {"type": "json_object"},
     }
+    # OpenRouter-only knob: exclude providers that geo-block our region so we
+    # don't intermittently 403 -> stub. Gated by base URL so non-OpenRouter
+    # OpenAI-compatible endpoints (which reject unknown fields) stay unaffected.
+    if "openrouter.ai" in OPENAI_BASE_URL and OPENROUTER_IGNORE_PROVIDERS:
+        payload["provider"] = {"ignore": OPENROUTER_IGNORE_PROVIDERS}
 
     logger.info(
         "calling openai-compatible: base=%s model=%s key_prefix=%s",
