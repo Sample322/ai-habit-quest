@@ -73,20 +73,48 @@ Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (b
 
 ## What's broken / pending — ordered by urgency
 
-### 🔴 1. AI plans falling back to stub silently
-**Symptom:** User creates a new custom goal, expects a Llama-generated plan with custom tasks → gets generic stub tasks ("минимальный шаг / основное действие").
+### ✅ 1. AI plans falling back to stub — RESOLVED (session 5, 2026-05-30 23:xx)
+**Root cause (proven from backend runtime logs via Timeweb REST API):** the backend's
+`AI_SERVICE_URL` had pointed at a **stale ai-service domain (`…e620…`) that stopped
+resolving** after the app was recreated. axios got `getaddrinfo ENOTFOUND` → silent
+`catch` → `localStubPlan`. That's why ai-service logs showed zero POSTs — the requests
+never left the backend. Log evidence:
+```
+WARN [AiService] ai-service unreachable, falling back to local stub:
+     getaddrinfo ENOTFOUND sample322-ai-habit-quest-e620.twc1.net
+LOG  [PlansService] plan generated ... provider=stub
+```
 
-**Already diagnosed:**
-- ai-service log shows **zero** POST `/generate-plan` requests during the period the user tested → backend never reached ai-service successfully OR something stripped the request en route. But backend log says `ai-service returned empty plan, using local stub` — meaning the POST DID get a response.
-- Backend is correctly configured with `AI_SERVICE_URL` pointing at 71a2.
-- ai-service `/healthz` confirms `provider=openai`, key prefix `sk-or-v1`, model is the paid `llama-3.1-8b-instruct` (not `:free`).
+**Fix:** env `AI_SERVICE_URL` was corrected to the live `…71a2…` (already done in the
+panel), and the code was hardened:
+- `ai.service.ts` axios `timeout 30s → 90s` (ai-service budgets 60s for the LLM call;
+  30s cut off legitimate slow Premium 30-day generations).
+- New **`GET /ai/diag`** endpoint: backend-side probe of ai-service reachability + a
+  sample generation. Catches a future domain change instantly instead of via stub plans.
+- `AiPlanResponse.provider` now includes `'openai'`.
 
-**Last action shipped (commit `7f26901`):** rich diagnostic logging in `backend/src/ai/ai.service.ts` (logs raw HTTP status + body of ai-service reply) and `ai-service/main.py` (logs OpenRouter status + body + request line). After redeploy, the next failed goal creation should produce log entries that pinpoint exactly which of:
-- (a) OpenRouter rate-limit / auth / model issue
-- (b) ai-service code path returning empty `schedule`
-- (c) Backend hitting wrong URL despite env says otherwise
+**Verified end-to-end** — `curl https://…55ff…/ai/diag` returns:
+`{"sample":{"ok":true,"provider":"openai","scheduleDays":7,"ms":7087}}` → real Llama plan.
 
-**Next step:** with the new Timeweb MCP connected, pull fresh logs after a new goal creation and read the new lines. Likely fix is a single env var (`OPENAI_BASE_URL` missing in ai-service env?) or a Pydantic shape mismatch.
+**Note:** goals that ALREADY got a stub plan keep it (stored in `Plan` table; the cache
+only ever stored non-stub). Only **new** goals get a real plan. Delete + recreate any old
+stub goals to refresh them.
+
+**Deploy-pipeline fix (same session):** deploys were chronically marked "failed" because
+the runtime Docker image shipped the full `node_modules` (typescript, webpack via
+`@nestjs/cli`, ts-loader, …) → registry pull took ~4.5 min and blew Timeweb's deploy
+window even though the container started fine. `backend/Dockerfile` now runs
+`npm prune --omit=dev` after build (and `prisma` moved to prod deps since the startup CMD
+runs `prisma db push`). Slim image now deploys cleanly.
+
+**How to drive Timeweb now:** the `timeweb` MCP server is NOT functional (spawn npx
+ENOENT) and has no log/deploy tools anyway. Use the **REST API directly** with the
+`TIMEWEB_TOKEN` from `~/.claude.json` — it works:
+- list apps: `GET https://api.timeweb.cloud/api/v1/apps` (backend id `200081`, ai `201299`, web `201439`)
+- runtime logs: `GET /api/v1/apps/{id}/logs?limit=2000` → `{app_logs:[...]}`
+- deploy list: `GET /api/v1/apps/{id}/deploys`
+- deploy logs: `GET /api/v1/apps/{id}/deploy/{deploy_id}/logs`
+- trigger redeploy: `POST /api/v1/apps/{id}/deploy` body `{"commit_sha":"<40-hex>"}`
 
 ### 🟡 2. Telegram Stars payment integration not yet tested end-to-end
 **Code is ready** (`bot.service.ts` listens for `pre_checkout_query` + `:successful_payment`, calls `payments.handleStarsSuccessFromBot`), but `TELEGRAM_STARS_ENABLED=false` in backend env. Owner currently has admin Premium so no need yet. To activate: flip env to `true` + redeploy backend + buy 250 Stars in BotFather → test invoice.
