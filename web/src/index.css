@@ -32,3 +32,14 @@ body {
     @apply w-full rounded-card bg-transparent text-text border border-white/10 font-medium py-3 px-4 transition active:opacity-80;
   }
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

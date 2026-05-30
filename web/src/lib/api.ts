@@ -58,8 +58,8 @@ export const api = {
 
   goals: () => request<Goal[]>('/goals'),
 
-  createGoal: (title: string, category: GoalCategory) =>
-    request<Goal>('/goals', { method: 'POST', body: JSON.stringify({ title, category }) }),
+  createGoal: (title: string, category: GoalCategory, signal?: AbortSignal) =>
+    request<Goal>('/goals', { method: 'POST', body: JSON.stringify({ title, category }), signal }),
 
   goal: (id: string) => request<Goal & { plan: { payload: Plan } | null }>(`/goals/${id}`),
 

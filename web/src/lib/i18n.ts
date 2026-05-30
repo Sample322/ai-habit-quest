@@ -19,6 +19,16 @@ const dict = {
       titlePlaceholder: 'Например: бегать 3 раза в неделю',
       start: 'Поехали',
     },
+    creating: {
+      heading: 'Готовим твой план',
+      note: 'AI продумывает привычки и расписывает шаги по дням — это займёт несколько секунд.',
+      stages: [
+        'Формулируем цель',
+        'Подбираем привычки',
+        'Расписываем план по дням',
+        'Финальные штрихи',
+      ],
+    },
     today: {
       title: 'Сегодня',
       empty: 'На сегодня заданий пока нет. Загляни попозже.',
@@ -74,6 +84,7 @@ const dict = {
     errors: {
       auth: 'Не удалось войти в Telegram Mini App.',
       generic: 'Что-то пошло не так. Попробуй ещё раз.',
+      timeout: 'Генерация заняла слишком долго. Цель могла создаться — обнови приложение или попробуй ещё раз.',
       freeGoalLimit: 'В бесплатной версии доступна одна активная цель. Открой Premium, чтобы добавить ещё.',
     },
   },
@@ -94,6 +105,16 @@ const dict = {
       titleLabel: 'Goal title',
       titlePlaceholder: 'e.g. Run three times a week',
       start: 'Start',
+    },
+    creating: {
+      heading: 'Building your plan',
+      note: 'The AI is designing your habits and a day-by-day schedule — this takes a few seconds.',
+      stages: [
+        'Framing your goal',
+        'Choosing habits',
+        'Drafting the day-by-day plan',
+        'Final touches',
+      ],
     },
     today: {
       title: 'Today',
@@ -150,6 +171,7 @@ const dict = {
     errors: {
       auth: 'Could not authenticate Telegram Mini App.',
       generic: 'Something went wrong. Try again.',
+      timeout: 'Generation took too long. The goal may have been created — refresh the app or try again.',
       freeGoalLimit: 'Free tier allows only one active goal. Unlock Premium to add more.',
     },
   },
