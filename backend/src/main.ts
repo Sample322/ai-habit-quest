@@ -6,9 +6,18 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
 
+  // CORS — explicit config so the Telegram WebView (which serves the Mini
+  // App from `*.twc1.net`) can call our backend on a different `*.twc1.net`
+  // host. We don't rely on cookies, so credentials are off: that lets the
+  // browser accept reflected origins without the "credentialed wildcard"
+  // restriction. The Authorization header is allow-listed for our JWT bearer.
   app.enableCors({
     origin: true,
-    credentials: true,
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Type'],
+    maxAge: 86400,
   });
 
   app.useGlobalPipes(
