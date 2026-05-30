@@ -85,9 +85,18 @@ def healthz() -> dict[str, str]:
 
 @app.post("/generate-plan", response_model=PlanResponse)
 async def generate_plan(req: PlanRequest) -> PlanResponse:
+    logger.info(
+        "generate-plan: provider=%s category=%s horizon=%s title=%r",
+        AI_PROVIDER, req.category, req.horizonDays, req.goalTitle,
+    )
     if AI_PROVIDER == "openai":
         try:
-            return await _generate_with_openai(req)
+            result = await _generate_with_openai(req)
+            logger.info(
+                "openai success: %d schedule days for %r",
+                len(result.schedule), req.goalTitle,
+            )
+            return result
         except Exception as exc:  # noqa: BLE001
             logger.warning("OpenAI provider failed, falling back to stub: %s", exc)
     elif AI_PROVIDER == "ollama":
@@ -151,9 +160,17 @@ async def _generate_with_openai(req: PlanRequest) -> PlanResponse:
         "response_format": {"type": "json_object"},
     }
 
+    logger.info(
+        "calling openai-compatible: base=%s model=%s key_prefix=%s",
+        OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY[:8] if OPENAI_API_KEY else "(empty)",
+    )
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers)
         if resp.status_code >= 400:
+            logger.error(
+                "openai HTTP %s body=%s",
+                resp.status_code, resp.text[:500],
+            )
             raise HTTPException(status_code=502, detail=f"OpenAI API {resp.status_code}: {resp.text[:200]}")
         body = resp.json()
 
