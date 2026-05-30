@@ -29,6 +29,12 @@ const dict = {
         'Финальные штрихи',
       ],
     },
+    regen: {
+      action: 'Перегенерировать план',
+      loading: 'Генерирую новый план…',
+      done: 'План обновлён ✨',
+      busy: 'AI сейчас занят — попробуй ещё раз через минуту.',
+    },
     today: {
       title: 'Сегодня',
       empty: 'На сегодня заданий пока нет. Загляни попозже.',
@@ -115,6 +121,12 @@ const dict = {
         'Drafting the day-by-day plan',
         'Final touches',
       ],
+    },
+    regen: {
+      action: 'Regenerate plan',
+      loading: 'Generating a new plan…',
+      done: 'Plan updated ✨',
+      busy: 'The AI is busy — try again in a minute.',
     },
     today: {
       title: 'Today',

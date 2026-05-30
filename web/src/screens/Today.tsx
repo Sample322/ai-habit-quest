@@ -36,6 +36,8 @@ export function Today({
   const i = t(lang);
   const [tasks, setTasks] = useState<DailyTask[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [regenGoalId, setRegenGoalId] = useState<string | null>(null);
+  const [regenMsg, setRegenMsg] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const list = await api.todayTasks();
@@ -45,6 +47,29 @@ export function Today({
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function regenerate(goalId: string): Promise<void> {
+    if (regenGoalId) return;
+    setRegenGoalId(goalId);
+    setRegenMsg(i.regen.loading);
+    haptic('medium');
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 100_000);
+    try {
+      await api.regeneratePlan(goalId, ctrl.signal);
+      await load();
+      notify('success');
+      setRegenMsg(i.regen.done);
+    } catch (err) {
+      notify('error');
+      const status = (err as { status?: number }).status;
+      setRegenMsg(status === 503 ? i.regen.busy : i.errors.generic);
+    } finally {
+      clearTimeout(timeout);
+      setRegenGoalId(null);
+      setTimeout(() => setRegenMsg(null), 4000);
+    }
+  }
 
   async function toggle(id: string): Promise<void> {
     setBusy(id);
@@ -76,6 +101,15 @@ export function Today({
     <div className="space-y-5">
       <HeaderCard lang={lang} pct={overall.pct} done={overall.done} total={overall.total} activeGoalsCount={activeGoalsCount} />
 
+      {regenMsg && (
+        <div className="surface text-sm flex items-center gap-3 animate-[fadeIn_240ms_ease-out]">
+          {regenGoalId && (
+            <span className="h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" aria-hidden />
+          )}
+          <span className={regenGoalId ? 'text-text' : 'text-muted'}>{regenMsg}</span>
+        </div>
+      )}
+
       {isLoading && <SkeletonGoals />}
 
       {!isLoading && !hasTasks && (
@@ -90,6 +124,9 @@ export function Today({
             group={group}
             onToggle={toggle}
             onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
+            onRegenerate={() => regenerate(group.goalId)}
+            regenerating={regenGoalId === group.goalId}
+            regenDisabled={regenGoalId !== null}
             busyId={busy}
           />
         ))}
@@ -167,12 +204,18 @@ function GoalSection({
   group,
   onToggle,
   onDelete,
+  onRegenerate,
+  regenerating,
+  regenDisabled,
   busyId,
 }: {
   lang: Lang;
   group: GoalGroup;
   onToggle: (id: string) => void;
   onDelete: () => void;
+  onRegenerate: () => void;
+  regenerating: boolean;
+  regenDisabled: boolean;
   busyId: string | null;
 }) {
   const i = t(lang);
@@ -183,6 +226,22 @@ function GoalSection({
         <div className="text-[11px] text-muted tabular-nums shrink-0">
           {group.done}/{group.total}
         </div>
+        <button
+          onClick={onRegenerate}
+          disabled={regenDisabled}
+          aria-label={i.regen.action}
+          title={i.regen.action}
+          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-accent hover:bg-accent/10 transition disabled:opacity-40"
+        >
+          {regenerating ? (
+            <span className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" aria-hidden />
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          )}
+        </button>
         <button
           onClick={onDelete}
           aria-label={i.deleteGoal.iconLabel}

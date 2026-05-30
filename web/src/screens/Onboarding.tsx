@@ -33,7 +33,7 @@ export function Onboarding({
   const [error, setError] = useState<string | null>(null);
   const stageTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stages = i.onboarding.creating.stages;
+  const stages = i.creating.stages;
 
   // Pace the visual stages while the (single) create request is in flight,
   // holding on the last stage until the server responds.
@@ -92,8 +92,8 @@ export function Onboarding({
 
       {submitting ? (
         <GoalCreating
-          heading={i.onboarding.creating.heading}
-          note={i.onboarding.creating.note}
+          heading={i.creating.heading}
+          note={i.creating.note}
           stages={stages}
           current={stage}
         />

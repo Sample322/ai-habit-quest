@@ -63,6 +63,9 @@ export const api = {
 
   goal: (id: string) => request<Goal & { plan: { payload: Plan } | null }>(`/goals/${id}`),
 
+  regeneratePlan: (goalId: string, signal?: AbortSignal) =>
+    request<Goal>(`/goals/${goalId}/regenerate-plan`, { method: 'POST', signal }),
+
   previewDeleteGoal: (id: string) =>
     request<{
       goalId: string;

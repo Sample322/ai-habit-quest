@@ -1,7 +1,7 @@
 interface GoalCreatingProps {
   heading: string;
   note: string;
-  stages: string[];
+  stages: readonly string[];
   /** Index of the in-progress stage. Stages before it render as done. */
   current: number;
 }
