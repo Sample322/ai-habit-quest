@@ -37,6 +37,11 @@ export class GoalsController {
     return this.goals.findById(id, me.id);
   }
 
+  @Post(':id/regenerate-plan')
+  regeneratePlan(@CurrentUser() me: AuthenticatedUser, @Param('id') id: string) {
+    return this.goals.regeneratePlan(id, me.id);
+  }
+
   @Get(':id/delete-preview')
   previewDeletion(
     @CurrentUser() me: AuthenticatedUser,

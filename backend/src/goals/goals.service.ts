@@ -175,6 +175,30 @@ export class GoalsService {
     };
   }
 
+  /**
+   * Regenerate the AI plan for an existing goal (e.g. when the first attempt
+   * fell back to the stub). Replaces the plan + habits, re-materialises today's
+   * tasks, and recomputes gamification so XP/streak stay consistent after the
+   * old tasks are cascaded away. If the AI is busy (stub), nothing is changed.
+   */
+  async regeneratePlan(goalId: string, userId: string): Promise<GoalView & { plan: unknown }> {
+    const goal = await this.findGoalOrThrow(goalId, userId);
+    const user = await this.users.findById(userId);
+
+    await this.plans.regenerateForGoal(goal.id, {
+      category: goal.category,
+      goalTitle: goal.title,
+      horizonDays: goal.horizonDays,
+      language: user.languageCode === 'en' ? 'en' : 'ru',
+    });
+
+    await this.tasks.materialiseTodayForUser(userId);
+    await this.gamification.recompute(userId);
+
+    this.logger.log(`Plan regenerated for goalId=${goalId} title="${goal.title}"`);
+    return this.findById(goalId, userId);
+  }
+
   private async findGoalOrThrow(goalId: string, userId: string): Promise<Goal> {
     const goal = await this.prisma.goal.findFirst({ where: { id: goalId, userId } });
     if (!goal) throw new NotFoundException('Goal not found');
