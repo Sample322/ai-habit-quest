@@ -1,6 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 
+// The platform healthcheck hits /health frequently — it must never be
+// rate-limited (a throttled 429 would mark the container unhealthy).
+@SkipThrottle()
 @Controller()
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

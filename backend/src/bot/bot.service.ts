@@ -124,21 +124,30 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
     this.bot.catch((err) => this.logger.error(`Bot error: ${err}`));
 
     const webhookUrl = envString('TELEGRAM_WEBHOOK_URL', '');
+    const bot = this.bot;
     if (webhookUrl) {
-      // Webhook mode: Telegram POSTs updates to TELEGRAM_WEBHOOK_URL (which must
-      // point at this app's POST /bot/webhook). A secret token derived from the
-      // bot token is verified on every request so only Telegram can post.
+      // Webhook mode. CRITICAL: do NOT await Telegram round-trips here — this
+      // runs inside onModuleInit, which blocks app.listen(). A slow/failing
+      // bot.init()/setWebhook would stop the port from binding and fail the
+      // platform healthcheck. Set it up detached; the handler comes online a
+      // moment later and drop_pending_updates covers the brief gap.
       const secretToken = this.webhookSecretToken(token);
-      await this.bot.init();
-      this.webhookHandler = webhookCallback(this.bot, 'express', { secretToken });
-      await this.bot.api.setWebhook(webhookUrl, {
-        secret_token: secretToken,
-        drop_pending_updates: true,
-      });
-      this.logger.log(`Bot started in webhook mode as @${this.bot.botInfo.username} -> ${webhookUrl}`);
+      void (async () => {
+        try {
+          await bot.init();
+          this.webhookHandler = webhookCallback(bot, 'express', { secretToken });
+          await bot.api.setWebhook(webhookUrl, {
+            secret_token: secretToken,
+            drop_pending_updates: true,
+          });
+          this.logger.log(`Bot started in webhook mode as @${bot.botInfo.username} -> ${webhookUrl}`);
+        } catch (err) {
+          this.logger.error(`Webhook setup failed: ${(err as Error).message}`);
+        }
+      })();
     } else {
       // Default: long-polling. Safe and simple for a single instance.
-      void this.bot.start({
+      void bot.start({
         onStart: (info) => this.logger.log(`Bot started in long-polling mode as @${info.username}`),
       });
     }
