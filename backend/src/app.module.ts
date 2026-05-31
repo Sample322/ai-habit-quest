@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
@@ -21,6 +23,11 @@ import { AdminModule } from './admin/admin.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    // Baseline abuse protection. Generous per-IP default so real users never
+    // hit it; expensive endpoints (goal create / regenerate, which each cost an
+    // LLM call) tighten this with @Throttle. Requires `trust proxy` (main.ts)
+    // so the client IP — not Caddy's — is the throttle key.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -36,5 +43,6 @@ import { AdminModule } from './admin/admin.module';
     PaymentsModule,
     AdminModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

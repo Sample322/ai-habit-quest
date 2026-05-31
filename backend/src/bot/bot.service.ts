@@ -1,14 +1,19 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
-import { Bot, InlineKeyboard } from 'grammy';
+import { createHash } from 'node:crypto';
+import type { Request, Response } from 'express';
+import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { envString } from '../config/env';
 import { PaymentsService } from '../payments/payments.service';
 
+type WebhookHandler = (req: Request, res: Response) => Promise<void>;
+
 @Injectable()
 export class BotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotService.name);
   private bot?: Bot;
+  private webhookHandler?: WebhookHandler;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -120,17 +125,38 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     const webhookUrl = envString('TELEGRAM_WEBHOOK_URL', '');
     if (webhookUrl) {
-      await this.bot.api.setWebhook(webhookUrl);
-      this.logger.log(`Webhook set: ${webhookUrl}`);
+      // Webhook mode: Telegram POSTs updates to TELEGRAM_WEBHOOK_URL (which must
+      // point at this app's POST /bot/webhook). A secret token derived from the
+      // bot token is verified on every request so only Telegram can post.
+      const secretToken = this.webhookSecretToken(token);
+      await this.bot.init();
+      this.webhookHandler = webhookCallback(this.bot, 'express', { secretToken });
+      await this.bot.api.setWebhook(webhookUrl, {
+        secret_token: secretToken,
+        drop_pending_updates: true,
+      });
+      this.logger.log(`Bot started in webhook mode as @${this.bot.botInfo.username} -> ${webhookUrl}`);
     } else {
+      // Default: long-polling. Safe and simple for a single instance.
       void this.bot.start({
         onStart: (info) => this.logger.log(`Bot started in long-polling mode as @${info.username}`),
       });
     }
   }
 
+  /** Express handler for incoming Telegram updates, or undefined in long-polling mode. */
+  getWebhookHandler(): WebhookHandler | undefined {
+    return this.webhookHandler;
+  }
+
+  /** Deterministic per-bot secret for the Telegram webhook (no extra env needed). */
+  private webhookSecretToken(botToken: string): string {
+    return createHash('sha256').update(`ahq-webhook:${botToken}`).digest('hex');
+  }
+
   async onModuleDestroy(): Promise<void> {
-    if (this.bot) await this.bot.stop();
+    // bot.stop() applies to long-polling; in webhook mode there's nothing to stop.
+    if (this.bot && !this.webhookHandler) await this.bot.stop();
   }
 
   async sendReminder(chatId: bigint, text: string): Promise<void> {

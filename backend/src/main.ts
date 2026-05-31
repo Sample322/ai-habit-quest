@@ -6,6 +6,11 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
 
+  // Behind Timeweb's Caddy reverse proxy: trust the first hop so `req.ip`
+  // resolves to the real client (via X-Forwarded-For) — required for per-client
+  // rate limiting instead of throttling everyone under Caddy's single IP.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   // CORS — explicit config so the Telegram WebView (which serves the Mini
   // App from `*.twc1.net`) can call our backend on a different `*.twc1.net`
   // host. We don't rely on cookies, so credentials are off: that lets the

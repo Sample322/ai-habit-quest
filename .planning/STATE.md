@@ -2,8 +2,8 @@
 
 **Initialized:** 2026-05-27
 **Phase 1 closed:** 2026-05-29
-**Current focus:** Wave 1 deployment + diagnosis of AI plan fallback
-**Status:** all three Apps live on Timeweb, day-1 loop verified, AI provider intermittently falling back to stub (under diagnosis)
+**Current focus:** Launch-readiness & security (Prisma migrations ✅, secret rotation, webhook)
+**Status:** all three Apps live on Timeweb; AI plans real & relevant (OpenRouter via ai-service, retries beat geo/429); day-1 loop + regenerate verified end-to-end; DB now on Prisma migrations
 
 > **For a complete picture, see [HANDOFF.md](HANDOFF.md)** — it has live URLs, env vars, open issues, next steps, and instructions to drive Timeweb via MCP.
 
@@ -13,8 +13,9 @@
 |-------|--------|-------|
 | 1 — Foundation & day-1 loop | ✅ **done** (2026-05-29) | All success criteria met. End-to-end verified in Telegram. |
 | 2 — Tasks, gamification, reminders, i18n | ✅ shipped, partial verification | Multi-goal aggregation + cache + goal delete fixed. Reminders cron live but not yet UAT'd. |
-| Wave 1 (real AI + Stars hooks) | ⏳ in flight | OpenRouter integrated, Stars webhook wired. AI fallback bug under diagnosis. |
-| Wave 2 (privacy + referrals + admin stats) | pending | Will start after Wave 1 issue closed. |
+| Wave 1 (real AI + Stars hooks) | ✅ **done** (2026-05-31) | AI stub bug resolved (URL + WandB ignore + 403/429 retries). `/ai/diag` 10/10 openai. Per-goal regenerate-plan added. |
+| Launch-readiness | ⏳ in flight | Prisma migrations adopted (baseline 0_init, `migrate deploy` on boot) ✅. TODO: rotate JWT_SECRET/ADMIN_PASSWORD + NODE_ENV=production (owner, panel); optional bot webhook. |
+| Wave 2 (privacy + referrals + admin stats) | pending | After launch-readiness. |
 | 3 — Monetisation & admin | partial | Telegram Stars code ready (flag off). YooKassa stubbed until self-employed registration. |
 | 4 — Growth & launch checklist | pending | Catalogs, referrals, polish. |
 
@@ -36,9 +37,10 @@ e7a6161 fix(cors): explicit CORS config
 
 ## Open follow-ups (top of stack)
 
-1. **Diagnose AI plan stub fallback** — use new diagnostic logging from commit `7f26901` after the next plan-gen attempt. The MCP-Timeweb is now configured in `~/.claude.json` so the next session can pull logs directly.
-2. **Generate Prisma baseline migration** before going public — current code uses `db push` which is fine for dev but loses migration history.
-3. **Switch backend bot from long-polling to webhook** — set `TELEGRAM_WEBHOOK_URL` once we have a stable HTTPS endpoint.
+1. ✅ **AI plan stub fallback** — RESOLVED (stale AI_SERVICE_URL + WandB geo-block 403 + upstream 429; fixed via env + provider.ignore + retries). Note: Timeweb MCP is non-functional (`spawn npx ENOENT`); drive Timeweb via REST API with `TIMEWEB_TOKEN` instead.
+2. ✅ **Prisma baseline migration** — DONE. Baseline `0_init` resolved-as-applied on prod; Dockerfile runs `migrate deploy` on boot (no more `db push --accept-data-loss`).
+3. **Rotate secrets (owner, Timeweb panel)** — `JWT_SECRET`, `ADMIN_BASIC_PASSWORD`, set `NODE_ENV=production` on `ahq-backend`, then redeploy.
+4. **Switch backend bot from long-polling to webhook** — set `TELEGRAM_WEBHOOK_URL` once we have a stable HTTPS endpoint (avoids 409 getUpdates conflicts on restart).
 4. **Wave 2 work** — privacy + ToS pages, referral link UI, `/admin/stats` endpoint.
 5. **Telegram Stars** — flip `TELEGRAM_STARS_ENABLED=true`, run an end-to-end Stars test.
 

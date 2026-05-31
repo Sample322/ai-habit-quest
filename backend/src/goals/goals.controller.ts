@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
 import { GoalCategory } from '@prisma/client';
 
@@ -24,6 +25,8 @@ export class GoalsController {
     return this.goals.listForUser(me.id);
   }
 
+  // Each creation triggers an LLM plan generation — cap it tightly per client.
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post()
   create(
     @CurrentUser() me: AuthenticatedUser,
@@ -37,6 +40,8 @@ export class GoalsController {
     return this.goals.findById(id, me.id);
   }
 
+  // Also an LLM call — same tight cap as creation.
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':id/regenerate-plan')
   regeneratePlan(@CurrentUser() me: AuthenticatedUser, @Param('id') id: string) {
     return this.goals.regeneratePlan(id, me.id);
