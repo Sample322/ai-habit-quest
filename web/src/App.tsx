@@ -119,7 +119,7 @@ export function App() {
 
   return (
     <div className="min-h-screen px-4 pt-6 pb-24 max-w-xl mx-auto">
-      <Header user={user} lang={lang} />
+      <Header user={user} lang={lang} onAdminClick={() => setAdminOpen(true)} />
 
       {tab === 'today' && (
         <Today
