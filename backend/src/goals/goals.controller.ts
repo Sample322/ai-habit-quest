@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
 import { GoalCategory } from '@prisma/client';
@@ -40,10 +40,13 @@ export class GoalsController {
     return this.goals.findById(id, me.id);
   }
 
-  // Also an LLM call — same tight cap as creation.
+  // Also an LLM call — same tight cap as creation. Premium-only feature.
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':id/regenerate-plan')
   regeneratePlan(@CurrentUser() me: AuthenticatedUser, @Param('id') id: string) {
+    if (!me.isPremium) {
+      throw new ForbiddenException({ code: 'premium_required', message: 'Regenerating the plan is a Premium feature.' });
+    }
     return this.goals.regeneratePlan(id, me.id);
   }
 

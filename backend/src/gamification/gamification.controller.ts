@@ -4,27 +4,32 @@ import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from './gamification.service';
+import { computeRank, computeAchievements } from './progress-extras';
 
 @UseGuards(JwtAuthGuard)
-@Controller('progress')
+@Controller()
 export class GamificationController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
   ) {}
 
-  @Get()
+  @Get('progress')
   async overview(@CurrentUser() me: AuthenticatedUser) {
     const state = await this.gamification.recompute(me.id);
+    const lang = me.languageCode === 'en' ? 'en' : 'ru';
 
     // Last 7 days completion bar
     const since = new Date();
     since.setUTCHours(0, 0, 0, 0);
     since.setUTCDate(since.getUTCDate() - 6);
 
-    const rows = await this.prisma.dailyTask.findMany({
-      where: { userId: me.id, localDate: { gte: since } },
-    });
+    const [rows, completedTasks, goals, referrals] = await Promise.all([
+      this.prisma.dailyTask.findMany({ where: { userId: me.id, localDate: { gte: since } } }),
+      this.prisma.dailyTask.count({ where: { userId: me.id, doneAt: { not: null } } }),
+      this.prisma.goal.count({ where: { userId: me.id } }),
+      this.prisma.user.count({ where: { referredById: me.id } }),
+    ]);
 
     const byDate = new Map<string, { total: number; done: number }>();
     for (const r of rows) {
@@ -44,6 +49,44 @@ export class GamificationController {
       last7.push({ date: k, total: e.total, done: e.done });
     }
 
-    return { ...state, last7 };
+    const rank = computeRank(state.xpTotal, lang);
+    const achievements = computeAchievements(
+      { xpTotal: state.xpTotal, streakBest: state.streakBest, completedTasks, goals, referrals },
+      lang,
+    );
+
+    return { ...state, last7, rank, achievements, completedTasks };
+  }
+
+  /** Live XP leaderboard: top players + the caller's own rank. */
+  @Get('leaderboard')
+  async leaderboard(@CurrentUser() me: AuthenticatedUser) {
+    const top = await this.prisma.user.findMany({
+      orderBy: [{ xpTotal: 'desc' }, { createdAt: 'asc' }],
+      take: 20,
+      select: { id: true, firstName: true, username: true, xpTotal: true, level: true, streakCurrent: true },
+    });
+
+    const meRow = await this.prisma.user.findUniqueOrThrow({
+      where: { id: me.id },
+      select: { xpTotal: true },
+    });
+    // Rank = how many users have strictly more XP, +1.
+    const ahead = await this.prisma.user.count({ where: { xpTotal: { gt: meRow.xpTotal } } });
+    const totalPlayers = await this.prisma.user.count();
+
+    return {
+      myRank: ahead + 1,
+      totalPlayers,
+      top: top.map((u, i) => ({
+        position: i + 1,
+        id: u.id,
+        name: u.firstName || u.username || (me.languageCode === 'en' ? 'Player' : 'Игрок'),
+        xp: u.xpTotal,
+        level: u.level,
+        streak: u.streakCurrent,
+        isMe: u.id === me.id,
+      })),
+    };
   }
 }
