@@ -144,6 +144,15 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
       </div>
 
       <div className="text-[11px] text-muted/80 leading-relaxed">{i.subscription.offer}</div>
+      <div className="text-[11px] text-center text-muted/70 flex justify-center gap-3">
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+          {i.subscription.privacyLink}
+        </a>
+        <span>·</span>
+        <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+          {i.subscription.termsLink}
+        </a>
+      </div>
       {error && <div className="text-xs text-danger break-words">{error}</div>}
     </Backdrop>
   );
