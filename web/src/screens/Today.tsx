@@ -51,6 +51,7 @@ export function Today({
 
   async function regenerate(goalId: string): Promise<void> {
     if (regenGoalId) return;
+    if (!user.isPremium) { haptic('light'); onPremiumClick(); return; } // Premium-only feature → upsell
     setRegenGoalId(goalId);
     setRegenMsg(i.regen.loading);
     haptic('medium');

@@ -51,12 +51,50 @@ export interface DailyTask {
   localDate: string;
 }
 
+export interface RankInfo {
+  level: number;
+  name: string;
+  currentXp: number;
+  levelStartXp: number;
+  nextLevelXp: number;
+  progressPct: number;
+}
+
+export interface Achievement {
+  code: string;
+  icon: string;
+  title: string;
+  description: string;
+  target: number;
+  current: number;
+  earned: boolean;
+}
+
 export interface ProgressOverview {
   streakCurrent: number;
   streakBest: number;
   xpTotal: number;
   level: number;
+  completedTasks: number;
+  rank: RankInfo;
+  achievements: Achievement[];
   last7: { date: string; total: number; done: number }[];
+}
+
+export interface LeaderboardEntry {
+  position: number;
+  id: string;
+  name: string;
+  xp: number;
+  level: number;
+  streak: number;
+  isMe: boolean;
+}
+
+export interface Leaderboard {
+  myRank: number;
+  totalPlayers: number;
+  top: LeaderboardEntry[];
 }
 
 export interface PlanDay {

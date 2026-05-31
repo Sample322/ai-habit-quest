@@ -1,6 +1,6 @@
 import type {
   DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory,
-  AdminStats, AdminUser, AdminFeedback,
+  AdminStats, AdminUser, AdminFeedback, Leaderboard,
 } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
@@ -97,6 +97,8 @@ export const api = {
     }>(`/tasks/${id}/toggle`, { method: 'POST' }),
 
   progress: () => request<ProgressOverview>('/progress'),
+
+  leaderboard: () => request<Leaderboard>('/leaderboard'),
 
   prices: () => request<{ trialPriceRub: number; monthlyPriceRub: number; premiumStars: number }>('/payments/prices'),
 
