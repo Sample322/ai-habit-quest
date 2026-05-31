@@ -26,12 +26,11 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     this.bot.command('start', async (ctx) => {
       const botUsername = envString('TELEGRAM_BOT_USERNAME', '');
-      const buttonUrl = botUsername ? `https://t.me/${botUsername}/app` : undefined;
+      // Main Mini App deep link: t.me/<bot>?startapp=... opens the bot's Main
+      // Mini App. Requires "Main Mini App" enabled in BotFather. We use a URL
+      // button (not .webApp(), which rejects t.me links with BUTTON_URL_INVALID).
+      const buttonUrl = botUsername ? `https://t.me/${botUsername}?startapp=start` : undefined;
       const isRu = ctx.from?.language_code?.startsWith('ru');
-      // A t.me/<bot>/app deep link must be a normal URL button — `.webApp()`
-      // only accepts the Mini App's own HTTPS URL and rejects t.me links with
-      // 400 BUTTON_URL_INVALID. `.url()` opens the Mini App via the deep link
-      // and doesn't depend on the (frequently-changing) web domain.
       const kb = buttonUrl
         ? new InlineKeyboard().url(isRu ? 'Открыть AI Habit Quest' : 'Open AI Habit Quest', buttonUrl)
         : undefined;

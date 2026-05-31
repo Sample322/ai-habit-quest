@@ -8,7 +8,9 @@ const BOT_USERNAME = import.meta.env.VITE_TG_BOT_USERNAME || 'AI_Habit_Tracking_
 
 export function ReferralCard({ lang, user }: { lang: Lang; user: User }): JSX.Element {
   const i = t(lang);
-  const link = `https://t.me/${BOT_USERNAME}/app?startapp=ref_${user.referralCode}`;
+  // Main Mini App deep link — `t.me/<bot>?startapp=` opens the bot's Main Mini
+  // App with start_param=ref_<code> (no named-app short name required).
+  const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {

@@ -4,7 +4,7 @@
 
 ## Ссылки (готовы)
 
-- **Mini App (открыть):** `https://t.me/AI_Habit_Tracking_bot/app`
+- **Mini App (открыть, Main Mini App):** `https://t.me/AI_Habit_Tracking_bot?startapp=open`
 - **Бот:** [@AI_Habit_Tracking_bot](https://t.me/AI_Habit_Tracking_bot)
 - **Веб (прямой):** https://sample322-ai-habit-quest-0676.twc1.net
 - **Политика конфиденциальности:** https://sample322-ai-habit-quest-0676.twc1.net/privacy.html
@@ -63,5 +63,5 @@
 
 ## Заметки
 
-- Реферальная ссылка для роста: `https://t.me/AI_Habit_Tracking_bot/app?startapp=ref_<КОД>` (код у каждого юзера на экране «Сегодня» → «Пригласи друга»).
+- Реферальная ссылка для роста: `https://t.me/AI_Habit_Tracking_bot?startapp=ref_<КОД>` (код у каждого юзера на экране «Сегодня» → «Пригласи друга»). Требует включённого **Main Mini App** в BotFather.
 - Telegram Stars/платежи и стабильная работа бота в чате зависят от связности сервера с Telegram (RU-хостинг) — это отдельная задача (прокси / вынос бота на зарубежный хост).
