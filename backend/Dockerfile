@@ -46,7 +46,8 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 EXPOSE 3001
-# `db push` syncs schema.prisma -> DB in one shot. No migration files needed
-# for Phase 1. We will switch to `migrate deploy` once the schema is stable
-# and we generate the first proper migration set.
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && node dist/main.js"]
+# Apply pending migrations on boot, then start. The prod DB was baselined
+# (migration 0_init marked applied via `migrate resolve`), so this is a no-op
+# until a new migration is committed — and it NEVER drops data, unlike the old
+# `db push --accept-data-loss`. If there are no pending migrations it exits 0.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
