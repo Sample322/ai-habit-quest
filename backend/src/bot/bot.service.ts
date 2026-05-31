@@ -1,19 +1,14 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, forwardRef } from '@nestjs/common';
-import { createHash } from 'node:crypto';
-import type { Request, Response } from 'express';
-import { Bot, InlineKeyboard, webhookCallback } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { envString } from '../config/env';
 import { PaymentsService } from '../payments/payments.service';
 
-type WebhookHandler = (req: Request, res: Response) => Promise<void>;
-
 @Injectable()
 export class BotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotService.name);
   private bot?: Bot;
-  private webhookHandler?: WebhookHandler;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -123,49 +118,17 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     this.bot.catch((err) => this.logger.error(`Bot error: ${err}`));
 
-    const webhookUrl = envString('TELEGRAM_WEBHOOK_URL', '');
-    const bot = this.bot;
-    if (webhookUrl) {
-      // Webhook mode. CRITICAL: do NOT await Telegram round-trips here — this
-      // runs inside onModuleInit, which blocks app.listen(). A slow/failing
-      // bot.init()/setWebhook would stop the port from binding and fail the
-      // platform healthcheck. Set it up detached; the handler comes online a
-      // moment later and drop_pending_updates covers the brief gap.
-      const secretToken = this.webhookSecretToken(token);
-      void (async () => {
-        try {
-          await bot.init();
-          this.webhookHandler = webhookCallback(bot, 'express', { secretToken });
-          await bot.api.setWebhook(webhookUrl, {
-            secret_token: secretToken,
-            drop_pending_updates: true,
-          });
-          this.logger.log(`Bot started in webhook mode as @${bot.botInfo.username} -> ${webhookUrl}`);
-        } catch (err) {
-          this.logger.error(`Webhook setup failed: ${(err as Error).message}`);
-        }
-      })();
-    } else {
-      // Default: long-polling. Safe and simple for a single instance.
-      void bot.start({
-        onStart: (info) => this.logger.log(`Bot started in long-polling mode as @${info.username}`),
-      });
-    }
-  }
-
-  /** Express handler for incoming Telegram updates, or undefined in long-polling mode. */
-  getWebhookHandler(): WebhookHandler | undefined {
-    return this.webhookHandler;
-  }
-
-  /** Deterministic per-bot secret for the Telegram webhook (no extra env needed). */
-  private webhookSecretToken(botToken: string): string {
-    return createHash('sha256').update(`ahq-webhook:${botToken}`).digest('hex');
+    // Long-polling only. Webhook delivery to this Timeweb RU host is unreliable
+    // (Telegram's servers get "Connection timed out" reaching the IP), so we
+    // use outbound long-polling, which is robust here. Detached so it never
+    // blocks app bootstrap / the platform healthcheck.
+    void this.bot.start({
+      onStart: (info) => this.logger.log(`Bot started in long-polling mode as @${info.username}`),
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
-    // bot.stop() applies to long-polling; in webhook mode there's nothing to stop.
-    if (this.bot && !this.webhookHandler) await this.bot.stop();
+    if (this.bot) await this.bot.stop();
   }
 
   async sendReminder(chatId: bigint, text: string): Promise<void> {
