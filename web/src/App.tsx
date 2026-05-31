@@ -8,6 +8,7 @@ import { Onboarding } from './screens/Onboarding';
 import { Today } from './screens/Today';
 import { Progress } from './screens/Progress';
 import { Subscription } from './screens/Subscription';
+import { Admin } from './screens/Admin';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
 
@@ -22,6 +23,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('today');
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -102,7 +104,7 @@ export function App() {
   if (!activeGoal) {
     return (
       <div className="min-h-screen px-4 pt-6 pb-24 max-w-xl mx-auto">
-        <Header user={user} lang={lang} />
+        <Header user={user} lang={lang} onAdminClick={() => setAdminOpen(true)} />
         <Onboarding
           lang={lang}
           onCreated={async () => {
@@ -110,6 +112,7 @@ export function App() {
             await refreshGoals();
           }}
         />
+        {adminOpen && <Admin onClose={() => setAdminOpen(false)} />}
       </div>
     );
   }
@@ -160,6 +163,8 @@ export function App() {
           }}
         />
       )}
+
+      {adminOpen && <Admin onClose={() => setAdminOpen(false)} />}
 
       {deletingGoal && (
         <ConfirmDeleteGoalModal
@@ -216,7 +221,7 @@ function GoalCreatorModal({
   );
 }
 
-function Header({ user, lang }: { user: User; lang: Lang }) {
+function Header({ user, lang, onAdminClick }: { user: User; lang: Lang; onAdminClick?: () => void }) {
   const i = t(lang);
   return (
     <header className="flex items-center justify-between mb-5">
@@ -234,8 +239,15 @@ function Header({ user, lang }: { user: User; lang: Lang }) {
         </div>
         <div className="text-xs text-muted">{user.firstName ?? user.username ?? ''}</div>
       </div>
-      <div className="text-right text-xs text-muted">
-        🔥 {user.streak.current} · ⭐ {user.xpTotal} · Lv {user.level}
+      <div className="flex items-center gap-3">
+        <div className="text-right text-xs text-muted">
+          🔥 {user.streak.current} · ⭐ {user.xpTotal} · Lv {user.level}
+        </div>
+        {user.isAdmin && onAdminClick && (
+          <button onClick={onAdminClick} aria-label="Админка" title="Админка" className="text-lg leading-none">
+            🛠
+          </button>
+        )}
       </div>
     </header>
   );

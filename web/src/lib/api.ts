@@ -1,4 +1,7 @@
-import type { DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory } from './types';
+import type {
+  DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory,
+  AdminStats, AdminUser, AdminFeedback,
+} from './types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -101,6 +104,17 @@ export const api = {
     request<{ confirmationUrl: string; subscriptionId: string }>('/payments/yookassa/start-trial', { method: 'POST' }),
 
   starsInvoice: () => request<{ invoiceLink: string; payload: string }>('/payments/stars/invoice', { method: 'POST' }),
+
+  // --- In-app admin (only works for admin Telegram IDs) ---
+  adminStats: () => request<AdminStats>('/app-admin/stats'),
+  adminUsers: (q?: string) =>
+    request<AdminUser[]>(`/app-admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  adminSetPremium: (id: string, isPremium: boolean) =>
+    request<{ id: string; isPremium: boolean; premiumUntil: string | null }>(
+      `/app-admin/users/${id}/premium`,
+      { method: 'POST', body: JSON.stringify({ isPremium }) },
+    ),
+  adminFeedback: () => request<AdminFeedback[]>('/app-admin/feedback'),
 };
 
 export { ApiError };

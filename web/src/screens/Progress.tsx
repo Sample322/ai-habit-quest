@@ -24,18 +24,20 @@ export function Progress({ lang, user }: { lang: Lang; user: User }) {
 
       <section className="surface">
         <div className="text-xs text-muted mb-3">{i.progress.last7}</div>
-        <div className="flex items-end gap-2 h-32">
+        <div className="flex items-end gap-2">
           {data.last7.map((d) => {
             const ratio = d.total === 0 ? 0 : d.done / d.total;
-            const heightPct = Math.max(8, Math.round(ratio * 100));
+            const heightPct = Math.max(6, Math.round(ratio * 100));
             return (
               <div key={d.date} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full bg-bg rounded relative" style={{ height: '100%' }}>
+                {/* Fixed-height track so the fill % has a concrete box to grow in. */}
+                <div className="w-full h-28 bg-bg rounded relative overflow-hidden">
                   <div
-                    className="absolute bottom-0 inset-x-0 bg-accent rounded transition-all"
+                    className="absolute bottom-0 inset-x-0 bg-accent rounded-b transition-all duration-500"
                     style={{ height: `${heightPct}%`, opacity: ratio === 0 ? 0.25 : 1 }}
                   />
                 </div>
+                <div className="text-[10px] text-muted tabular-nums">{d.done}/{d.total}</div>
                 <div className="text-[10px] text-muted">{d.date.slice(5)}</div>
               </div>
             );
