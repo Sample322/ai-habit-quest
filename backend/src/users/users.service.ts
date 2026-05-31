@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { envNumber } from '../config/env';
+import { isAdminTelegramId } from '../admin/is-admin';
 
 @Injectable()
 export class UsersService {
@@ -35,6 +36,7 @@ export class UsersService {
       timezone: u.timezone,
       reminder: { hour: u.reminderHour, minute: u.reminderMinute },
       isPremium: u.isPremium,
+      isAdmin: isAdminTelegramId(u.telegramId),
       premiumUntil: u.premiumUntil,
       streak: { current: u.streakCurrent, best: u.streakBest },
       xpTotal: u.xpTotal,
