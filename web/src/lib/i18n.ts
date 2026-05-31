@@ -35,6 +35,15 @@ const dict = {
       done: 'План обновлён ✨',
       busy: 'AI сейчас занят — попробуй ещё раз через минуту.',
     },
+    referral: {
+      title: 'Пригласи друга',
+      subtitle: 'За каждого друга — +3 дня Premium (до 30 дней в месяц).',
+      invited: 'Приглашено',
+      share: 'Поделиться',
+      copy: 'Скопировать',
+      copied: 'Скопировано ✓',
+      shareText: 'Заходи в AI Habit Quest — собираем привычки с AI-планом 💪',
+    },
     today: {
       title: 'Сегодня',
       empty: 'На сегодня заданий пока нет. Загляни попозже.',
@@ -129,6 +138,15 @@ const dict = {
       loading: 'Generating a new plan…',
       done: 'Plan updated ✨',
       busy: 'The AI is busy — try again in a minute.',
+    },
+    referral: {
+      title: 'Invite a friend',
+      subtitle: 'Get +3 days of Premium per friend (up to 30 days/month).',
+      invited: 'Invited',
+      share: 'Share',
+      copy: 'Copy',
+      copied: 'Copied ✓',
+      shareText: 'Join me on AI Habit Quest — build habits with an AI plan 💪',
     },
     today: {
       title: 'Today',

@@ -24,6 +24,7 @@ interface TelegramWebApp {
     notificationOccurred: (type: 'success' | 'error' | 'warning') => void;
   };
   openLink: (url: string) => void;
+  openTelegramLink: (url: string) => void;
   openInvoice: (url: string, callback?: (status: string) => void) => void;
   MainButton: {
     setText: (text: string) => void;
@@ -78,4 +79,22 @@ export function openInvoice(url: string, cb?: (status: string) => void): void {
   const tg = getWebApp();
   if (tg && tg.openInvoice) tg.openInvoice(url, cb);
   else window.open(url, '_blank', 'noopener');
+}
+
+/** Open Telegram's native share sheet for a link (used for referrals). */
+export function shareUrl(url: string, text: string): void {
+  const tg = getWebApp();
+  const share = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(share);
+  else window.open(share, '_blank', 'noopener');
+}
+
+/** Best-effort clipboard copy; returns whether it likely succeeded. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }

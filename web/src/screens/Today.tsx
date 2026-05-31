@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { DailyTask, User } from '../lib/types';
+import { ReferralCard } from '../components/ReferralCard';
 
 interface TodayProps {
   lang: Lang;
@@ -153,6 +154,8 @@ export function Today({
       >
         + {i.today.addGoal}
       </button>
+
+      <ReferralCard lang={lang} user={user} />
     </div>
   );
 }

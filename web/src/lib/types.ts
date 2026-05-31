@@ -15,6 +15,7 @@ export interface User {
   xpTotal: number;
   level: number;
   referralCode: string;
+  referralCount: number;
   limits: {
     maxGoals: number | null;
     maxHabits: number | null;
