@@ -23,6 +23,11 @@ export interface AuthResult {
 // expires. 2099 is safely below any JS Date overflow and obvious in DB.
 const ADMIN_PREMIUM_UNTIL = new Date('2099-12-31T23:59:59Z');
 
+// Referral rewards: the inviter gets +3 days of Premium per joined friend,
+// capped at 10 rewarded referrals per calendar month (= 30 days/month).
+const REFERRAL_BONUS_DAYS = 3;
+const REFERRAL_MONTHLY_CAP = 10;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -61,26 +66,33 @@ export class AuthService {
       ? parsed.startParam.slice(4)
       : undefined;
 
-    const upserted = await this.prisma.user.upsert({
-      where: { telegramId },
-      update: {
-        username: parsed.user.username ?? null,
-        firstName: parsed.user.first_name ?? null,
-        lastName: parsed.user.last_name ?? null,
-        languageCode: normaliseLang(parsed.user.language_code),
-      },
-      create: {
-        telegramId,
-        username: parsed.user.username ?? null,
-        firstName: parsed.user.first_name ?? null,
-        lastName: parsed.user.last_name ?? null,
-        languageCode: normaliseLang(parsed.user.language_code),
-        referralCode: generateReferralCode(),
-        referredById: referralStart ?? null,
-      },
-    });
+    const baseData = {
+      username: parsed.user.username ?? null,
+      firstName: parsed.user.first_name ?? null,
+      lastName: parsed.user.last_name ?? null,
+      languageCode: normaliseLang(parsed.user.language_code),
+    };
 
-    const user = await this.applyAdminPremiumIfNeeded(upserted, telegramId);
+    const existing = await this.prisma.user.findUnique({ where: { telegramId } });
+    let user: User;
+    if (existing) {
+      user = await this.prisma.user.update({ where: { telegramId }, data: baseData });
+    } else {
+      user = await this.prisma.user.create({
+        data: { telegramId, ...baseData, referralCode: generateReferralCode() },
+      });
+      // Attribute the referral and reward the inviter — only on first signup.
+      // Never let a referral problem break the login flow.
+      if (referralStart) {
+        try {
+          user = await this.applyReferral(user, referralStart);
+        } catch (err) {
+          this.logger.warn(`referral apply failed: ${(err as Error).message}`);
+        }
+      }
+    }
+
+    user = await this.applyAdminPremiumIfNeeded(user, telegramId);
 
     const token = await this.jwt.signAsync({ sub: user.id });
 
@@ -95,6 +107,42 @@ export class AuthService {
         isPremium: user.isPremium,
       },
     };
+  }
+
+  /**
+   * Link a brand-new user to the inviter identified by their referral code,
+   * and grant the inviter +3 days of Premium (capped per month). Returns the
+   * (possibly updated) new user. Safe no-op on unknown/self codes.
+   */
+  private async applyReferral(newUser: User, code: string): Promise<User> {
+    const inviter = await this.prisma.user.findUnique({ where: { referralCode: code } });
+    if (!inviter || inviter.id === newUser.id) return newUser;
+
+    const linked = await this.prisma.user.update({
+      where: { id: newUser.id },
+      data: { referredById: inviter.id },
+    });
+
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthlyRefs = await this.prisma.user.count({
+      where: { referredById: inviter.id, createdAt: { gte: monthStart } },
+    });
+    if (monthlyRefs > REFERRAL_MONTHLY_CAP) return linked; // monthly cap reached
+
+    // Don't shorten an admin's sentinel "infinite" Premium.
+    if (inviter.premiumUntil && inviter.premiumUntil.getTime() === ADMIN_PREMIUM_UNTIL.getTime()) {
+      return linked;
+    }
+
+    const base = inviter.premiumUntil && inviter.premiumUntil > now ? inviter.premiumUntil : now;
+    const newUntil = new Date(base.getTime() + REFERRAL_BONUS_DAYS * 24 * 60 * 60 * 1000);
+    await this.prisma.user.update({
+      where: { id: inviter.id },
+      data: { isPremium: true, premiumUntil: newUntil },
+    });
+    this.logger.log(`Referral: user ${newUser.id} joined via inviter ${inviter.id} (+${REFERRAL_BONUS_DAYS}d premium)`);
+    return linked;
   }
 
   /**

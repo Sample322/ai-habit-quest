@@ -27,6 +27,7 @@ export class UsersService {
 
   async getProfile(id: string) {
     const u = await this.findById(id);
+    const referralCount = await this.prisma.user.count({ where: { referredById: id } });
     return {
       id: u.id,
       telegramId: u.telegramId.toString(),
@@ -42,6 +43,7 @@ export class UsersService {
       xpTotal: u.xpTotal,
       level: u.level,
       referralCode: u.referralCode,
+      referralCount,
       limits: {
         maxGoals: u.isPremium ? null : this.freeMaxGoals(),
         maxHabits: u.isPremium ? null : this.freeMaxHabits(),
