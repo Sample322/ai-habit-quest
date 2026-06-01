@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Flame, Zap, Settings, X } from 'lucide-react';
 
 import { api, setToken } from './lib/api';
 import { detectLanguage, getInitData, ready } from './lib/telegram';
@@ -11,6 +12,7 @@ import { Subscription } from './screens/Subscription';
 import { Admin } from './screens/Admin';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
+import { NumberTicker } from './components/ui/NumberTicker';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -70,7 +72,13 @@ export function App() {
   if (status === 'authenticating' || status === 'idle') {
     return (
       <Center>
-        <div className="text-muted">{i.loading}</div>
+        <div className="flex flex-col items-center gap-3">
+          <span className="relative w-10 h-10 rounded-full">
+            <span className="absolute inset-0 rounded-full border-2 border-accent/30" />
+            <span className="absolute inset-0 rounded-full border-2 border-t-accent border-r-transparent border-b-transparent border-l-transparent animate-spin" />
+          </span>
+          <div className="eyebrow text-muted">{i.loading}</div>
+        </div>
       </Center>
     );
   }
@@ -212,15 +220,21 @@ function GoalCreatorModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md overflow-y-auto animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-bg w-full max-w-xl rounded-t-3xl sm:rounded-card p-6 m-0 sm:my-6 max-h-[90vh] overflow-y-auto"
+        className="bg-bg w-full max-w-xl rounded-t-3xl sm:rounded-card p-6 m-0 sm:my-6 max-h-[90vh] overflow-y-auto border border-hairline shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-end mb-2">
-          <button onClick={onClose} className="text-muted text-xl leading-none px-2">×</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="w-9 h-9 -mr-2 grid place-items-center rounded-pill text-muted hover:text-text hover:bg-white/5 transition"
+          >
+            <X size={18} />
+          </button>
         </div>
         <Onboarding lang={lang} onCreated={onCreated} />
       </div>
@@ -231,32 +245,56 @@ function GoalCreatorModal({
 function Header({ user, lang, onAdminClick }: { user: User; lang: Lang; onAdminClick?: () => void }) {
   const i = t(lang);
   return (
-    <header className="flex items-center justify-between mb-5">
-      <div>
-        <div className="text-lg font-semibold flex items-center gap-2">
-          <span>{i.appTitle}</span>
-          {user.isPremium && (
-            <span
-              className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent/20 text-accent"
-              title={i.subscription.activeTitle}
-            >
-              ⭐ Premium
+    <header className="flex items-center justify-between mb-6 gap-3">
+      <div className="min-w-0 flex items-center gap-3">
+        {/* Monogram avatar */}
+        <div className="shrink-0 w-10 h-10 rounded-pill border border-hairlineStrong bg-elevated grid place-items-center text-sm font-semibold">
+          {(user.firstName?.[0] ?? user.username?.[0] ?? '·').toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-semibold tracking-tight truncate">
+              {user.firstName ?? user.username ?? i.appTitle}
             </span>
-          )}
+            {user.isPremium && (
+              <span
+                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-pill bg-accentGrad text-white"
+                title={i.subscription.activeTitle}
+              >
+                Pro
+              </span>
+            )}
+          </div>
+          <div className="eyebrow mt-0.5">Lv {user.level} · {i.appTitle}</div>
         </div>
-        <div className="text-xs text-muted">{user.firstName ?? user.username ?? ''}</div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="text-right text-xs text-muted">
-          🔥 {user.streak.current} · ⭐ {user.xpTotal} · Lv {user.level}
-        </div>
+
+      {/* HUD chips */}
+      <div className="flex items-center gap-1.5">
+        <HudChip icon={<Flame size={13} className="text-warning" />} value={user.streak.current} />
+        <HudChip icon={<Zap size={13} className="text-accent" />} value={user.xpTotal} />
         {user.isAdmin && onAdminClick && (
-          <button onClick={onAdminClick} aria-label="Админка" title="Админка" className="text-lg leading-none">
-            🛠
+          <button
+            onClick={onAdminClick}
+            aria-label="Admin"
+            className="w-9 h-9 rounded-pill border border-hairline bg-surface/60 grid place-items-center text-muted hover:text-text transition"
+          >
+            <Settings size={15} />
           </button>
         )}
       </div>
     </header>
+  );
+}
+
+function HudChip({ icon, value }: { icon: React.ReactNode; value: number }) {
+  return (
+    <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-pill border border-hairline bg-surface/60">
+      {icon}
+      <span className="text-xs font-semibold tabular">
+        <NumberTicker value={value} duration={500} />
+      </span>
+    </div>
   );
 }
 

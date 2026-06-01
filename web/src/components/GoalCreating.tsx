@@ -1,3 +1,5 @@
+import { Check, Sparkles } from 'lucide-react';
+
 interface GoalCreatingProps {
   heading: string;
   note: string;
@@ -7,48 +9,53 @@ interface GoalCreatingProps {
 }
 
 /**
- * Staged "we're building your plan" feedback shown while the goal + AI plan are
- * generated. The backend call is a single request, so the stages are paced on a
- * timer by the caller — the work is real, the staging just makes the wait legible
- * instead of a frozen spinner.
+ * Cinematic "AI is building your plan" feedback. Stages light up as the timer
+ * ticks; the active row pulses with an accent glow.
  */
 export function GoalCreating({ heading, note, stages, current }: GoalCreatingProps) {
   return (
-    <div className="surface space-y-4 animate-[fadeIn_240ms_ease-out]">
+    <div className="card aurora p-6 space-y-5 animate-rise">
       <div className="flex items-center gap-3">
-        <span
-          className="h-5 w-5 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin"
-          aria-hidden
-        />
-        <h2 className="font-semibold">{heading}</h2>
+        <span className="relative grid h-9 w-9 place-items-center rounded-pill border border-hairlineStrong bg-elevated">
+          <Sparkles size={16} className="text-accentGlow" />
+          <span className="absolute inset-0 rounded-pill animate-pulse-glow" />
+        </span>
+        <div>
+          <h2 className="font-semibold text-lg leading-tight">{heading}</h2>
+          <div className="eyebrow mt-1">AI · {stages.length} steps</div>
+        </div>
       </div>
 
-      <ul className="space-y-3">
+      <ul className="space-y-2.5">
         {stages.map((label, idx) => {
           const done = idx < current;
           const active = idx === current;
           return (
             <li
               key={label}
-              className={`flex items-center gap-3 transition-opacity duration-300 ${
-                active ? 'opacity-100' : done ? 'opacity-80' : 'opacity-35'
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-card transition border ${
+                active
+                  ? 'border-accent/40 bg-accent/5'
+                  : done
+                  ? 'border-hairline bg-white/[0.02]'
+                  : 'border-transparent opacity-40'
               }`}
             >
               <span
-                className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm ${
+                className={`grid h-7 w-7 shrink-0 place-items-center rounded-pill text-[11px] font-bold transition ${
                   done
-                    ? 'bg-accent/15 text-accent'
+                    ? 'bg-positive text-bg'
                     : active
-                      ? 'bg-accent/10 text-accent'
-                      : 'bg-white/5 text-muted'
+                    ? 'bg-accent text-white'
+                    : 'bg-white/5 text-muted'
                 }`}
               >
-                {done ? '✓' : idx + 1}
+                {done ? <Check size={13} strokeWidth={3} /> : idx + 1}
               </span>
-              <span className={`text-sm ${active ? 'text-text' : 'text-muted'}`}>{label}</span>
+              <span className={`text-sm font-medium ${active || done ? 'text-text' : 'text-muted'}`}>{label}</span>
               {active && (
                 <span
-                  className="ml-auto h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin"
+                  className="ml-auto h-3.5 w-3.5 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin"
                   aria-hidden
                 />
               )}
@@ -57,7 +64,7 @@ export function GoalCreating({ heading, note, stages, current }: GoalCreatingPro
         })}
       </ul>
 
-      <p className="text-xs text-muted">{note}</p>
+      <p className="text-xs text-muted leading-relaxed">{note}</p>
     </div>
   );
 }

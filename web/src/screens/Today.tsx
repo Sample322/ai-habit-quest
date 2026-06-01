@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -6,6 +7,8 @@ import { t, type Lang } from '../lib/i18n';
 import type { DailyTask, User, BonusTask } from '../lib/types';
 import { ReferralCard } from '../components/ReferralCard';
 import { GoalInsightsModal } from '../components/GoalInsightsModal';
+import { ProgressRing } from '../components/ui/ProgressRing';
+import { NumberTicker } from '../components/ui/NumberTicker';
 
 interface TodayProps {
   lang: Lang;
@@ -52,7 +55,6 @@ export function Today({
 
   useEffect(() => {
     void load();
-    // Bonus is premium-only; backend returns null otherwise. Non-fatal.
     void (async () => { try { setBonus(await api.bonusToday()); } catch { /* ignore */ } })();
   }, [load]);
 
@@ -80,7 +82,7 @@ export function Today({
 
   async function regenerate(goalId: string): Promise<void> {
     if (regenGoalId) return;
-    if (!user.isPremium) { haptic('light'); onPremiumClick(); return; } // Premium-only feature → upsell
+    if (!user.isPremium) { haptic('light'); onPremiumClick(); return; }
     setRegenGoalId(goalId);
     setRegenMsg(i.regen.loading);
     haptic('medium');
@@ -134,10 +136,10 @@ export function Today({
 
   return (
     <div className="space-y-5">
-      <HeaderCard lang={lang} pct={overall.pct} done={overall.done} total={overall.total} activeGoalsCount={activeGoalsCount} />
+      <HeroRing lang={lang} pct={overall.pct} done={overall.done} total={overall.total} activeGoalsCount={activeGoalsCount} />
 
       {regenMsg && (
-        <div className="surface text-sm flex items-center gap-3 animate-[fadeIn_240ms_ease-out]">
+        <div className="surface text-sm flex items-center gap-3 animate-rise">
           {regenGoalId && (
             <span className="h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" aria-hidden />
           )}
@@ -145,28 +147,7 @@ export function Today({
         </div>
       )}
 
-      {bonus && (
-        <section className={`rounded-card p-4 border transition ${bonus.doneAt ? 'border-positive/30 bg-positive/5' : 'border-accent/40 bg-gradient-to-br from-accent/15 to-transparent'}`}>
-          <div className="flex items-center gap-2">
-            <span className="text-lg">✨</span>
-            <span className="font-semibold text-sm">{i.bonus.title}</span>
-            <span className="ml-auto text-[11px] text-accent font-medium">+{bonus.xp} XP</span>
-          </div>
-          <div className={`text-sm mt-2 ${bonus.doneAt ? 'line-through text-muted' : ''}`}>{bonus.title}</div>
-          {bonus.doneAt ? (
-            <div className="text-[11px] text-positive mt-2">✓ {i.bonus.done}</div>
-          ) : (
-            <button
-              onClick={completeBonus}
-              disabled={bonusBusy}
-              className="mt-3 w-full rounded-card bg-accent text-accentText font-medium py-2 text-sm transition active:opacity-80 disabled:opacity-50"
-            >
-              {bonusBusy ? '…' : i.bonus.claim}
-            </button>
-          )}
-          <div className="text-[10px] text-muted mt-2">{i.bonus.hint}</div>
-        </section>
-      )}
+      {bonus && <BonusCard bonus={bonus} bonusBusy={bonusBusy} lang={lang} onComplete={completeBonus} />}
 
       {isLoading && <SkeletonGoals />}
 
@@ -174,54 +155,58 @@ export function Today({
         <div className="surface text-muted text-sm">{i.today.empty}</div>
       )}
 
-      {hasTasks &&
-        groups.map((group) => (
-          <GoalSection
-            key={group.goalId}
-            lang={lang}
-            group={group}
-            onToggle={toggle}
-            onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
-            onRegenerate={() => regenerate(group.goalId)}
-            onInsights={() => setInsightsGoalId(group.goalId)}
-            regenerating={regenGoalId === group.goalId}
-            regenDisabled={regenGoalId !== null}
-            busyId={busy}
-          />
-        ))}
+      {hasTasks && (
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <GoalSection
+              key={group.goalId}
+              lang={lang}
+              group={group}
+              onToggle={toggle}
+              onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
+              onRegenerate={() => regenerate(group.goalId)}
+              onInsights={() => setInsightsGoalId(group.goalId)}
+              regenerating={regenGoalId === group.goalId}
+              regenDisabled={regenGoalId !== null}
+              busyId={busy}
+            />
+          ))}
+        </div>
+      )}
 
       {insightsGoalId && (
         <GoalInsightsModal lang={lang} goalId={insightsGoalId} onClose={() => setInsightsGoalId(null)} />
       )}
 
       {!user.isPremium && (
-        <button
-          onClick={onPremiumClick}
-          className="w-full rounded-card p-4 text-left transition active:opacity-80
-                     bg-gradient-to-br from-accent/20 via-accent/10 to-transparent
-                     border border-accent/30 hover:border-accent"
-        >
-          <div className="font-semibold text-accent flex items-center gap-2">
-            <span>⭐</span>
-            <span>{i.today.premiumCta}</span>
+        <button onClick={onPremiumClick} className="w-full text-left card aurora p-5 transition active:scale-[0.99]">
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+              <Crown size={18} className="text-white" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-base leading-tight">{i.today.premiumCta}</div>
+              <div className="text-xs text-muted mt-0.5">{i.common.tryPremium}</div>
+            </div>
+            <span className="text-muted">›</span>
           </div>
-          <div className="text-xs text-muted mt-1">{i.common.tryPremium}</div>
         </button>
       )}
 
       <button
         onClick={onAddGoal}
-        className="w-full rounded-card border border-dashed border-white/15 hover:border-accent
-                   text-muted hover:text-accent py-3 px-4 text-sm font-medium transition"
+        className="w-full rounded-card border border-dashed border-hairlineStrong hover:border-accent
+                   text-muted hover:text-accent py-4 px-4 text-sm font-medium transition flex items-center justify-center gap-2"
       >
-        + {i.today.addGoal}
+        <Plus size={16} strokeWidth={2.4} />
+        {i.today.addGoal}
       </button>
 
       <ReferralCard lang={lang} user={user} />
 
       {toast && (
-        <div className="fixed bottom-24 inset-x-0 z-[60] flex justify-center px-4 pointer-events-none">
-          <div className="bg-bg/95 border border-accent/30 rounded-card px-4 py-3 text-sm shadow-lg max-w-md w-full text-center animate-[fadeIn_240ms_ease-out]">
+        <div className="fixed bottom-28 inset-x-0 z-[60] flex justify-center px-4 pointer-events-none animate-pop">
+          <div className="card px-5 py-3 text-sm shadow-glow max-w-md w-full text-center font-medium">
             {toast}
           </div>
         </div>
@@ -230,7 +215,7 @@ export function Today({
   );
 }
 
-function HeaderCard({
+function HeroRing({
   lang,
   pct,
   done,
@@ -245,28 +230,87 @@ function HeaderCard({
 }) {
   const i = t(lang);
   return (
-    <section className="rounded-card p-5 bg-gradient-to-br from-surface to-surface/60 border border-white/5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]">
-      <div className="flex items-end justify-between gap-4">
-        <div className="space-y-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted">{i.today.title}</div>
-          <div className="text-[28px] leading-none font-bold tracking-tight">
-            {done}<span className="text-muted text-xl">/{total || '·'}</span>
+    <section className="card aurora p-5 flex items-center gap-5">
+      <ProgressRing pct={pct} size={120} stroke={9}>
+        <div className="hud-num text-3xl leading-none">
+          <NumberTicker value={pct} />
+          <span className="text-base text-muted">%</span>
+        </div>
+        <div className="eyebrow mt-1">{done}/{total || '·'}</div>
+      </ProgressRing>
+      <div className="flex-1 min-w-0">
+        <div className="eyebrow text-accent">{i.today.title}</div>
+        <div className="text-2xl font-bold leading-tight mt-1">
+          {total === 0
+            ? (lang === 'en' ? 'No tasks yet' : 'Заданий нет')
+            : pct === 100
+            ? (lang === 'en' ? 'All done · today wins' : 'Всё сделано · день взят')
+            : (lang === 'en' ? 'Keep moving' : 'Действуй')}
+        </div>
+        {activeGoalsCount > 1 && (
+          <div className="text-xs text-muted mt-1">
+            {activeGoalsCount} {i.today.goalsActiveCount}
           </div>
-          {activeGoalsCount > 1 && (
-            <div className="text-[11px] text-muted">
-              {activeGoalsCount} {i.today.goalsActiveCount}
-            </div>
-          )}
-        </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold text-accent leading-none">{pct}<span className="text-base text-muted">%</span></div>
-        </div>
+        )}
       </div>
-      <div className="mt-4 h-2 rounded-full bg-bg/80 overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-accent to-positive transition-all duration-500"
-          style={{ width: `${pct}%` }}
+    </section>
+  );
+}
+
+function BonusCard({
+  bonus,
+  bonusBusy,
+  lang,
+  onComplete,
+}: {
+  bonus: BonusTask;
+  bonusBusy: boolean;
+  lang: Lang;
+  onComplete: () => void;
+}) {
+  const i = t(lang);
+  const done = !!bonus.doneAt;
+  return (
+    <section
+      className={`relative overflow-hidden rounded-card p-5 border transition ${
+        done ? 'border-positive/30 bg-positive/[0.04]' : 'border-accentGlow/40 bg-elevated shadow-glow'
+      }`}
+    >
+      {!done && (
+        <span
+          className="pointer-events-none absolute -top-16 -right-16 w-44 h-44 rounded-full blur-3xl opacity-50"
+          style={{ background: 'radial-gradient(circle, #9b7dff 0%, transparent 70%)' }}
         />
+      )}
+      <div className="relative flex items-start gap-3">
+        <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center bg-accentGrad">
+          <Sparkles size={18} className="text-white" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{i.bonus.title}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-pill bg-accentGrad text-white">
+              +{bonus.xp} XP
+            </span>
+          </div>
+          <div className={`text-sm mt-2 leading-snug ${done ? 'line-through text-muted' : 'text-text'}`}>
+            {bonus.title}
+          </div>
+          {done ? (
+            <div className="text-xs text-positive mt-2 flex items-center gap-1">
+              <Check size={12} strokeWidth={3} /> {i.bonus.done}
+            </div>
+          ) : (
+            <button
+              onClick={onComplete}
+              disabled={bonusBusy}
+              className="btn-primary mt-4"
+            >
+              {bonusBusy ? '…' : i.bonus.claim}
+            </button>
+          )}
+          <div className="text-[10px] text-muted mt-2">{i.bonus.hint}</div>
+        </div>
       </div>
     </section>
   );
@@ -295,81 +339,39 @@ function GoalSection({
 }) {
   const i = t(lang);
   return (
-    <section className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2 px-1">
-        <div className="text-sm font-semibold tracking-tight truncate flex-1">{group.goalTitle}</div>
-        <div className="text-[11px] text-muted tabular-nums shrink-0">
+    <section className="space-y-2.5">
+      {/* Goal header — title + thin progress + actions */}
+      <div className="flex items-center gap-2 px-1">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold tracking-tight truncate">{group.goalTitle}</div>
+          <div className="mt-1.5 h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
+            <div
+              className="h-full bg-accentGrad rounded-full transition-all duration-700"
+              style={{ width: `${group.pct}%` }}
+            />
+          </div>
+        </div>
+        <div className="text-xs text-muted tabular shrink-0 pl-2">
           {group.done}/{group.total}
         </div>
-        <button
-          onClick={onInsights}
-          aria-label="Insights"
-          title="Insights"
-          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-accent hover:bg-accent/10 transition"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-        </button>
-        <button
-          onClick={onRegenerate}
-          disabled={regenDisabled}
-          aria-label={i.regen.action}
-          title={i.regen.action}
-          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-accent hover:bg-accent/10 transition disabled:opacity-40"
-        >
+        <IconAction onClick={onInsights} label="Insights">
+          <LayoutDashboard size={13} />
+        </IconAction>
+        <IconAction onClick={onRegenerate} disabled={regenDisabled} label={i.regen.action}>
           {regenerating ? (
             <span className="h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" aria-hidden />
           ) : (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 4v6h-6M1 20v-6h6" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
+            <RefreshCw size={13} />
           )}
-        </button>
-        <button
-          onClick={onDelete}
-          aria-label={i.deleteGoal.iconLabel}
-          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-danger hover:bg-danger/10 transition"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 3h8M5 3V2a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v1M3 3l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L9 3" />
-          </svg>
-        </button>
+        </IconAction>
+        <IconAction onClick={onDelete} label={i.deleteGoal.iconLabel} danger>
+          <Trash2 size={13} />
+        </IconAction>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-2 stagger">
         {group.tasks.map((task) => (
           <li key={task.id}>
-            <button
-              onClick={() => onToggle(task.id)}
-              disabled={busyId === task.id}
-              className={`w-full rounded-card p-4 flex items-center gap-3 text-left transition active:scale-[0.99] ${
-                task.doneAt
-                  ? 'bg-surface/50 border border-white/5'
-                  : 'bg-surface border border-white/10 hover:border-accent/40'
-              }`}
-            >
-              <div
-                className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition ${
-                  task.doneAt
-                    ? 'bg-positive border-2 border-positive'
-                    : 'border-2 border-muted hover:border-accent'
-                }`}
-              >
-                {task.doneAt && <span className="text-bg text-xs font-bold">✓</span>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className={`font-medium leading-snug ${task.doneAt ? 'line-through text-muted' : ''}`}>
-                  {task.title}
-                </div>
-                {task.doneAt && (
-                  <div className="text-[11px] text-positive mt-1">+{task.xpAwarded || 10} XP</div>
-                )}
-              </div>
-            </button>
+            <TaskRow task={task} busy={busyId === task.id} onToggle={() => onToggle(task.id)} />
           </li>
         ))}
       </ul>
@@ -377,11 +379,72 @@ function GoalSection({
   );
 }
 
+function TaskRow({ task, busy, onToggle }: { task: DailyTask; busy: boolean; onToggle: () => void }) {
+  const done = !!task.doneAt;
+  return (
+    <button
+      onClick={onToggle}
+      disabled={busy}
+      className={`relative w-full rounded-card p-3.5 pl-3 flex items-center gap-3 text-left transition border
+        ${done
+          ? 'bg-white/[0.015] border-hairline'
+          : 'bg-surface border-hairline hover:border-hairlineStrong hover:-translate-y-[1px]'}
+        active:scale-[0.99]
+      `}
+    >
+      <span
+        className={`shrink-0 w-6 h-6 rounded-pill grid place-items-center transition border-2 ${
+          done ? 'bg-positive border-positive' : 'border-muted/50 hover:border-accent'
+        }`}
+      >
+        {done && <Check size={13} strokeWidth={3.4} className="text-bg" />}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-medium leading-snug ${done ? 'line-through text-muted' : ''}`}>
+          {task.title}
+        </div>
+        {done && (
+          <div className="text-[11px] text-positive mt-0.5 tabular">+{task.xpAwarded || 10} XP</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function IconAction({
+  children,
+  onClick,
+  label,
+  disabled,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`shrink-0 w-7 h-7 rounded-pill grid place-items-center border border-hairline text-muted transition
+        disabled:opacity-40
+        ${danger ? 'hover:text-danger hover:border-danger/40 hover:bg-danger/5' : 'hover:text-accent hover:border-accent/40 hover:bg-accent/5'}
+      `}
+    >
+      {children}
+    </button>
+  );
+}
+
 function SkeletonGoals() {
   return (
     <div className="space-y-3">
       {[0, 1, 2].map((k) => (
-        <div key={k} className="rounded-card p-4 bg-surface/50 border border-white/5 animate-pulse">
+        <div key={k} className="surface animate-pulse">
           <div className="h-3 w-32 bg-white/10 rounded mb-3" />
           <div className="h-4 w-full bg-white/10 rounded" />
         </div>

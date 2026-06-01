@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Gift, Share2, Copy, Check } from 'lucide-react';
 
 import { t, type Lang } from '../lib/i18n';
 import type { User } from '../lib/types';
@@ -8,8 +9,6 @@ const BOT_USERNAME = import.meta.env.VITE_TG_BOT_USERNAME || 'AI_Habit_Tracking_
 
 export function ReferralCard({ lang, user }: { lang: Lang; user: User }): JSX.Element {
   const i = t(lang);
-  // Main Mini App deep link — `t.me/<bot>?startapp=` opens the bot's Main Mini
-  // App with start_param=ref_<code> (no named-app short name required).
   const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
   const [copied, setCopied] = useState(false);
 
@@ -24,26 +23,43 @@ export function ReferralCard({ lang, user }: { lang: Lang; user: User }): JSX.El
   }
 
   return (
-    <section className="rounded-card p-4 border border-accent/20 bg-gradient-to-br from-accent/10 to-transparent space-y-3">
-      <div>
-        <div className="font-semibold flex items-center gap-2"><span>🎁</span>{i.referral.title}</div>
-        <div className="text-xs text-muted mt-1">{i.referral.subtitle}</div>
+    <section className="card aurora p-5 space-y-4">
+      <div className="flex items-start gap-3">
+        <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+          <Gift size={18} className="text-white" />
+        </span>
+        <div className="min-w-0">
+          <div className="font-semibold text-base leading-tight">{i.referral.title}</div>
+          <div className="text-xs text-muted mt-0.5 leading-snug">{i.referral.subtitle}</div>
+        </div>
+        <div className="ml-auto text-right shrink-0">
+          <div className="text-2xl font-bold tabular leading-none">{user.referralCount}</div>
+          <div className="eyebrow mt-1">{i.referral.invited}</div>
+        </div>
       </div>
-      <div className="text-[11px] text-muted">
-        {i.referral.invited}: <b className="text-text">{user.referralCount}</b>
-      </div>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => { haptic('light'); shareUrl(link, i.referral.shareText); }}
-          className="flex-1 rounded-card bg-accent text-accentText font-medium py-2 text-sm transition active:opacity-80"
+          className="rounded-pill bg-white text-bg font-semibold py-2.5 text-sm transition active:scale-[0.98] flex items-center justify-center gap-1.5"
         >
+          <Share2 size={14} strokeWidth={2.5} />
           {i.referral.share}
         </button>
         <button
           onClick={copy}
-          className="flex-1 rounded-card border border-white/15 text-muted py-2 text-sm transition active:opacity-80"
+          className="rounded-pill border border-hairlineStrong text-text bg-white/[0.02] hover:bg-white/[0.05] py-2.5 text-sm transition active:scale-[0.98] flex items-center justify-center gap-1.5"
         >
-          {copied ? i.referral.copied : i.referral.copy}
+          {copied ? (
+            <>
+              <Check size={14} strokeWidth={2.5} className="text-positive" />
+              {i.referral.copied}
+            </>
+          ) : (
+            <>
+              <Copy size={14} strokeWidth={2.2} />
+              {i.referral.copy}
+            </>
+          )}
         </button>
       </div>
     </section>

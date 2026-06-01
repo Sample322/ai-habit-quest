@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { t, type Lang } from '../lib/i18n';
 import type { Achievement, AchievementRarity, LeaguesMe, ProgressOverview, Leaderboard, User } from '../lib/types';
+import { ProgressRing } from '../components/ui/ProgressRing';
+import { NumberTicker } from '../components/ui/NumberTicker';
 
 export function Progress({ lang, user, onUserChange, onPremiumClick }: {
   lang: Lang;
@@ -35,7 +38,6 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
         ...user,
         streak: { ...user.streak, current: res.streakCurrent, freezesLeft: res.streakFreezesLeft },
       });
-      // Refresh progress overview so the streak number on the rank card updates.
       setData(await api.progress());
     } catch (err) {
       const code = ((err as { body?: { code?: string } }).body)?.code;
@@ -46,112 +48,100 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
     }
   }
 
-  if (!data) return <div className="text-muted text-sm">{i.loading}</div>;
+  if (!data) return <ProgressSkeleton />;
 
-  const visibleAchievements = data.achievements;
-  const earned = visibleAchievements.filter((a) => a.earned).length;
+  const earned = data.achievements.filter((a) => a.earned).length;
 
   return (
-    <div className="space-y-5">
-      {/* Rank card */}
-      <section className="rounded-card p-5 bg-gradient-to-br from-accent/20 via-surface to-surface border border-accent/20">
-        <div className="flex items-end justify-between">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted">{L('Ранг', 'Rank')}</div>
-            <div className="text-2xl font-bold leading-tight">{data.rank.name}</div>
-            <div className="text-xs text-muted mt-0.5">{L('Уровень', 'Level')} {data.rank.level}</div>
+    <div className="space-y-5 stagger">
+      {/* Hero rank ring + big number */}
+      <section className="card aurora p-6">
+        <div className="flex items-center gap-5">
+          <ProgressRing pct={data.rank.progressPct} size={132} stroke={10}>
+            <div className="eyebrow">{L('Уровень', 'Level')}</div>
+            <div className="hud-num text-4xl leading-none mt-1">
+              <NumberTicker value={data.rank.level} duration={600} />
+            </div>
+          </ProgressRing>
+          <div className="flex-1 min-w-0">
+            <div className="eyebrow text-accent">{L('Ранг', 'Rank')}</div>
+            <div className="text-2xl font-bold leading-tight mt-1 truncate">{data.rank.name}</div>
+            <div className="mt-3 flex items-baseline gap-1">
+              <span className="hud-num text-3xl text-text">
+                <NumberTicker value={data.xpTotal} duration={900} />
+              </span>
+              <span className="text-xs text-muted">XP</span>
+            </div>
+            <div className="text-[11px] text-muted mt-1">
+              {L('До ур.', 'To lv')} {data.rank.level + 1}: {Math.max(0, data.rank.nextLevelXp - data.xpTotal)} XP
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-accent leading-none">{data.xpTotal}</div>
-            <div className="text-[11px] text-muted">XP</div>
-          </div>
-        </div>
-        <div className="mt-4 h-2.5 rounded-full bg-bg/80 overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-accent to-positive transition-all duration-500" style={{ width: `${data.rank.progressPct}%` }} />
-        </div>
-        <div className="text-[11px] text-muted mt-1.5 text-right">
-          {L('До уровня', 'To level')} {data.rank.level + 1}: {Math.max(0, data.rank.nextLevelXp - data.xpTotal)} XP
         </div>
       </section>
 
       {/* Quick stats */}
-      <section className="grid grid-cols-3 gap-3">
-        <Stat label={i.today.streak} value={`🔥 ${data.streakCurrent}`} sub={`${i.progress.bestStreak}: ${data.streakBest}`} />
-        <Stat label={L('Выполнено', 'Completed')} value={`${data.completedTasks}`} />
-        <Stat label={L('Достижения', 'Badges')} value={`${earned}/${visibleAchievements.length}`} />
+      <section className="grid grid-cols-3 gap-2.5">
+        <Stat icon={<Flame size={14} className="text-warning" />} label={i.today.streak} value={data.streakCurrent} sub={`${i.progress.bestStreak} ${data.streakBest}`} />
+        <Stat label={L('Выполнено', 'Done')} value={data.completedTasks} />
+        <Stat icon={<Award size={14} className="text-accent" />} label={L('Бейджи', 'Badges')} value={earned} sub={`/ ${data.achievements.length}`} />
       </section>
 
-      {/* Streak freeze (Premium) */}
-      <section className={`rounded-card p-4 border ${user.isPremium ? 'border-accent/30 bg-accent/5' : 'border-white/10 bg-surface/60'}`}>
+      {/* Streak freeze */}
+      <section className={`card p-4 ${user.isPremium ? '' : 'opacity-90'}`}>
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🧊</span>
+          <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center border border-hairlineStrong bg-bg/40">
+            <Snowflake size={18} className="text-accentGlow" />
+          </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold">{i.progress.freezeAction}</div>
-            <div className="text-[11px] text-muted">
+            <div className="text-sm font-semibold leading-tight">{i.progress.freezeAction}</div>
+            <div className="text-[11px] text-muted mt-0.5">
               {user.isPremium
                 ? `${i.progress.freezeLeft}: ${user.streak.freezesLeft}/2`
                 : i.progress.freezeFree}
             </div>
           </div>
-          <button
-            onClick={useFreeze}
-            disabled={freezeBusy || (user.isPremium && user.streak.freezesLeft <= 0)}
-            className="shrink-0 rounded-card px-3 py-1.5 text-xs font-medium border border-accent/40 text-accent hover:bg-accent/10 disabled:opacity-40 transition"
-          >
-            {freezeBusy ? '…' : i.progress.freezeAction}
-          </button>
+          {user.isPremium ? (
+            <button
+              onClick={useFreeze}
+              disabled={freezeBusy || user.streak.freezesLeft <= 0}
+              className="shrink-0 rounded-pill px-3.5 py-1.5 text-xs font-semibold bg-accent text-white hover:bg-accentGlow disabled:opacity-40 transition active:scale-95"
+            >
+              {freezeBusy ? '…' : i.progress.freezeAction}
+            </button>
+          ) : (
+            <button onClick={onPremiumClick} className="shrink-0 rounded-pill px-3 py-1.5 text-xs font-semibold border border-accent/40 text-accent hover:bg-accent/10 transition flex items-center gap-1">
+              <Crown size={12} /> Pro
+            </button>
+          )}
         </div>
         {freezeMsg && <div className="text-[11px] text-muted mt-2">{freezeMsg}</div>}
       </section>
 
       {/* Weekly league */}
-      {league && (
-        <section className="rounded-card p-4 border border-white/10 bg-surface/60 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{league.league.tierIcon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold">{i.progress.league} · {league.league.tierName}</div>
-              <div className="text-[11px] text-muted">{i.progress.leagueDaysLeft}: {league.league.daysLeft}d</div>
-            </div>
-            <div className="text-right">
-              <div className="text-lg font-bold text-accent">#{league.myRank}</div>
-              <div className="text-[10px] text-muted">{league.myWeeklyXp} XP</div>
-            </div>
-          </div>
-          <div className="text-[10px] text-muted flex items-center gap-3">
-            <span className="text-positive">↑ {i.progress.leaguePromote.replace('{n}', String(league.promoteCount))}</span>
-            <span className="text-danger">↓ {i.progress.leagueDemote.replace('{n}', String(league.demoteCount))}</span>
-          </div>
-          <div className="space-y-1">
-            {league.members.slice(0, 10).map((m) => {
-              const isPromo = m.position <= league.promoteCount;
-              const isDemo = m.position > league.members.length - league.demoteCount;
-              return (
-                <div key={m.id} className={`rounded-card px-3 py-2 flex items-center gap-3 text-xs border ${m.isMe ? 'border-accent/50 bg-accent/10' : 'border-white/5 bg-bg/40'}`}>
-                  <div className={`w-5 text-center font-bold ${isPromo ? 'text-positive' : isDemo ? 'text-danger' : 'text-muted'}`}>{m.position}</div>
-                  <div className="flex-1 truncate font-medium">{m.name}</div>
-                  <div className="text-[10px] text-muted">🔥{m.streak}</div>
-                  <div className="font-semibold tabular-nums">{m.weeklyXp}</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {league && <LeagueCard league={league} lang={lang} />}
 
-      {/* 7-day chart */}
+      {/* 7-day strip */}
       <section className="surface">
-        <div className="text-xs text-muted mb-3">{i.progress.last7}</div>
-        <div className="flex items-end gap-2">
+        <div className="flex items-baseline justify-between mb-3">
+          <div className="eyebrow">{i.progress.last7}</div>
+          <div className="text-[11px] text-muted tabular">
+            {data.last7.reduce((s, d) => s + d.done, 0)}/{data.last7.reduce((s, d) => s + d.total, 0)}
+          </div>
+        </div>
+        <div className="flex items-end gap-1.5 h-24">
           {data.last7.map((d) => {
             const ratio = d.total === 0 ? 0 : d.done / d.total;
-            const heightPct = Math.max(6, Math.round(ratio * 100));
+            const heightPct = Math.max(4, Math.round(ratio * 100));
+            const isPerfect = ratio === 1;
             return (
-              <div key={d.date} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full h-28 bg-bg rounded relative">
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-accent to-positive rounded transition-all" style={{ height: `${heightPct}%`, opacity: ratio === 0 ? 0.25 : 1 }} />
+              <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5">
+                <div className="w-full flex-1 bg-white/[0.04] rounded-sm relative overflow-hidden">
+                  <div
+                    className={`absolute bottom-0 inset-x-0 rounded-sm transition-all duration-700 ${isPerfect ? 'bg-successGrad' : 'bg-accentGrad'}`}
+                    style={{ height: `${heightPct}%`, opacity: ratio === 0 ? 0.2 : 1 }}
+                  />
                 </div>
-                <div className="text-[10px] text-muted">{d.date.slice(5)}</div>
+                <div className="text-[9px] text-muted tabular">{d.date.slice(8)}</div>
               </div>
             );
           })}
@@ -160,9 +150,9 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
 
       {/* Achievements */}
       <section className="space-y-3">
-        <div className="text-sm font-semibold px-1">{L('Достижения', 'Achievements')}</div>
-        <div className="grid grid-cols-2 gap-3">
-          {visibleAchievements.map((a) => (
+        <SectionHead title={L('Достижения', 'Achievements')} right={`${earned}/${data.achievements.length}`} />
+        <div className="grid grid-cols-2 gap-2.5">
+          {data.achievements.map((a) => (
             <AchievementCard key={a.code} a={a} lang={lang} />
           ))}
         </div>
@@ -170,20 +160,26 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
 
       {/* Leaderboard */}
       {board && (
-        <section className="space-y-2">
-          <div className="flex items-baseline justify-between px-1">
-            <div className="text-sm font-semibold">{L('Таблица лидеров', 'Leaderboard')}</div>
-            <div className="text-[11px] text-muted">{L('Ты', 'You')}: #{board.myRank} {L('из', 'of')} {board.totalPlayers}</div>
-          </div>
-          <div className="space-y-1.5">
-            {board.top.map((e) => (
-              <div key={e.id} className={`rounded-card px-3 py-2.5 flex items-center gap-3 border ${e.isMe ? 'border-accent/50 bg-accent/10' : 'border-white/5 bg-surface/60'}`}>
-                <div className={`w-6 text-center font-bold ${e.position <= 3 ? 'text-accent' : 'text-muted'}`}>
+        <section className="space-y-2.5">
+          <SectionHead
+            title={L('Топ игроков', 'Leaderboard')}
+            right={`#${board.myRank} / ${board.totalPlayers}`}
+          />
+          <div className="card divide-y divide-hairline overflow-hidden">
+            {board.top.slice(0, 12).map((e) => (
+              <div
+                key={e.id}
+                className={`px-4 py-2.5 flex items-center gap-3 transition ${e.isMe ? 'bg-accent/10' : ''}`}
+              >
+                <div className={`w-7 text-center font-bold ${e.position <= 3 ? 'text-warning' : 'text-muted text-xs'}`}>
                   {e.position === 1 ? '🥇' : e.position === 2 ? '🥈' : e.position === 3 ? '🥉' : e.position}
                 </div>
-                <div className="flex-1 min-w-0 truncate text-sm font-medium">{e.name}{e.isMe && <span className="text-accent text-xs"> · {L('ты', 'you')}</span>}</div>
-                <div className="text-[11px] text-muted shrink-0">🔥{e.streak} · Lv{e.level}</div>
-                <div className="text-sm font-semibold tabular-nums shrink-0">{e.xp}</div>
+                <div className="flex-1 min-w-0 truncate text-sm font-medium">
+                  {e.name}
+                  {e.isMe && <span className="text-accent text-[10px] uppercase tracking-wider ml-1">· {L('ты', 'you')}</span>}
+                </div>
+                <div className="text-[10px] text-muted tabular shrink-0 hidden xs:block">🔥{e.streak}</div>
+                <div className="text-sm font-bold tabular shrink-0 tabular text-text min-w-[3rem] text-right">{e.xp}</div>
               </div>
             ))}
           </div>
@@ -191,55 +187,159 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
       )}
 
       {!user.isPremium && (
-        <section className="rounded-card p-4 border border-accent/30 bg-gradient-to-br from-accent/15 to-transparent text-sm">
-          <div className="font-semibold text-accent">⭐ {i.today.premiumCta}</div>
-          <div className="text-xs text-muted mt-1">{L('Несколько целей, план на 30 дней, перегенерация плана и больше.', 'Multiple goals, 30-day plans, plan regeneration and more.')}</div>
-        </section>
+        <button onClick={onPremiumClick} className="w-full text-left card aurora p-5 transition active:scale-[0.99]">
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+              <Crown size={18} className="text-white" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-base leading-tight">{i.today.premiumCta}</div>
+              <div className="text-xs text-muted mt-0.5">
+                {L('Несколько целей, 30-дневный план, перегенерация и больше.', 'Multiple goals, 30-day plans, regeneration and more.')}
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-muted" />
+          </div>
+        </button>
       )}
     </div>
   );
 }
 
-function rarityRing(r: AchievementRarity): string {
-  if (r === 'gold') return 'border-yellow-400/60 bg-yellow-400/10';
-  if (r === 'silver') return 'border-slate-300/50 bg-slate-300/10';
-  if (r === 'secret') return 'border-fuchsia-400/60 bg-fuchsia-400/10';
-  return 'border-amber-700/40 bg-amber-700/10';  // bronze
+function LeagueCard({ league, lang }: { league: LeaguesMe; lang: Lang }) {
+  const i = t(lang);
+  return (
+    <section className="card aurora p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center bg-elevated border border-hairlineStrong text-2xl">
+          {league.league.tierIcon}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-muted" />
+            <span className="eyebrow">{i.progress.league}</span>
+          </div>
+          <div className="text-base font-bold leading-tight mt-0.5">{league.league.tierName}</div>
+          <div className="text-[10px] text-muted mt-0.5">
+            {i.progress.leagueDaysLeft}: {league.league.daysLeft}d
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="hud-num text-3xl leading-none">#{league.myRank}</div>
+          <div className="eyebrow mt-1 tabular">{league.myWeeklyXp} XP</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider">
+        <span className="text-positive font-semibold">↑ TOP {league.promoteCount}</span>
+        <span className="h-px flex-1 bg-hairline" />
+        <span className="text-danger font-semibold">↓ {league.demoteCount}</span>
+      </div>
+      <div className="space-y-1">
+        {league.members.slice(0, 10).map((m) => {
+          const isPromo = m.position <= league.promoteCount;
+          const isDemo = m.position > league.members.length - league.demoteCount;
+          return (
+            <div
+              key={m.id}
+              className={`rounded-card px-3 py-2 flex items-center gap-3 text-xs border ${
+                m.isMe ? 'border-accent/40 bg-accent/10' : 'border-transparent bg-bg/30'
+              }`}
+            >
+              <div className="w-1 self-stretch rounded-full" style={{ background: isPromo ? '#19d57a' : isDemo ? '#ef4444' : 'transparent' }} />
+              <div className={`w-5 text-center font-bold ${isPromo ? 'text-positive' : isDemo ? 'text-danger' : 'text-muted'}`}>
+                {m.position}
+              </div>
+              <div className="flex-1 truncate font-medium">{m.name}</div>
+              <div className="text-[10px] text-muted">🔥{m.streak}</div>
+              <div className="font-semibold tabular tabular text-text min-w-[2.5rem] text-right">{m.weeklyXp}</div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
+
+function SectionHead({ title, right }: { title: string; right?: string }) {
+  return (
+    <div className="flex items-baseline justify-between px-1">
+      <div className="text-sm font-semibold tracking-tight">{title}</div>
+      {right && <div className="text-[11px] text-muted tabular">{right}</div>}
+    </div>
+  );
+}
+
+function rarityStyle(r: AchievementRarity): { ring: string; glow: string; chip: string } {
+  if (r === 'gold') return { ring: 'border-rarGold/50', glow: 'shadow-[0_0_28px_-8px_rgba(243,201,105,0.6)]', chip: 'text-rarGold' };
+  if (r === 'silver') return { ring: 'border-rarSilver/50', glow: '', chip: 'text-rarSilver' };
+  if (r === 'secret') return { ring: 'border-rarSecret/60', glow: 'shadow-[0_0_32px_-8px_rgba(213,123,255,0.6)]', chip: 'text-rarSecret' };
+  return { ring: 'border-rarBronze/50', glow: '', chip: 'text-rarBronze' };
+}
+
 function rarityLabel(r: AchievementRarity, lang: Lang): string {
   if (lang === 'en') return r === 'secret' ? 'Secret' : r[0].toUpperCase() + r.slice(1);
   return { bronze: 'Бронза', silver: 'Серебро', gold: 'Золото', secret: 'Секрет' }[r];
 }
 
 function AchievementCard({ a, lang }: { a: Achievement; lang: Lang }) {
-  const ringClass = a.earned ? rarityRing(a.rarity) : 'border-white/5 bg-surface/50';
+  const rs = rarityStyle(a.rarity);
   return (
-    <div className={`rounded-card p-3 border transition ${ringClass}`}>
-      <div className="flex items-center gap-2">
-        <span className={`text-xl ${a.earned ? '' : a.hidden ? 'grayscale opacity-50' : 'grayscale opacity-40'}`}>{a.icon}</span>
+    <div
+      className={`relative overflow-hidden rounded-card p-3 border transition ${
+        a.earned ? `${rs.ring} bg-elevated ${rs.glow}` : 'border-hairline bg-surface/60'
+      }`}
+    >
+      {a.earned && a.rarity === 'secret' && (
+        <span className="pointer-events-none absolute -top-8 -right-8 w-24 h-24 rounded-full blur-2xl bg-rarSecret/30" />
+      )}
+      <div className="relative flex items-center gap-2">
+        <span
+          className={`shrink-0 w-9 h-9 rounded-pill grid place-items-center text-lg border ${
+            a.earned ? rs.ring + ' bg-bg/40' : 'border-hairline bg-bg/40'
+          } ${a.earned ? '' : a.hidden ? 'opacity-60' : 'opacity-40 grayscale'}`}
+        >
+          {a.hidden ? <Lock size={14} className="text-muted" /> : <span>{a.icon}</span>}
+        </span>
         <div className="min-w-0 flex-1">
-          <div className={`text-sm font-medium truncate ${a.earned ? '' : 'text-muted'}`}>{a.title}</div>
-          <div className="text-[9px] uppercase tracking-wider text-muted">
+          <div className={`text-sm font-semibold truncate ${a.earned ? '' : 'text-muted'}`}>{a.title}</div>
+          <div className={`text-[9px] uppercase tracking-wider font-bold ${a.earned ? rs.chip : 'text-dim'}`}>
             {rarityLabel(a.rarity, lang)}{a.bonusXp > 0 && a.earned ? ` · +${a.bonusXp} XP` : ''}
           </div>
         </div>
       </div>
-      <div className="text-[11px] text-muted mt-1.5">{a.description}</div>
+      <div className="relative text-[11px] text-muted mt-2 leading-snug line-clamp-2">{a.description}</div>
       {!a.earned && !a.hidden && (
-        <div className="mt-2 h-1 rounded-full bg-bg overflow-hidden">
-          <div className="h-full bg-accent/60" style={{ width: `${Math.min(100, Math.round((a.current / a.target) * 100))}%` }} />
+        <div className="relative mt-2 h-1 rounded-full bg-bg/40 overflow-hidden">
+          <div className="h-full bg-accent/60 transition-all duration-700" style={{ width: `${Math.min(100, Math.round((a.current / a.target) * 100))}%` }} />
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({ icon, label, value, sub }: { icon?: React.ReactNode; label: string; value: number; sub?: string }) {
   return (
     <div className="surface">
-      <div className="text-xs text-muted">{label}</div>
-      <div className="text-xl font-bold mt-1">{value}</div>
-      {sub && <div className="text-[10px] text-muted mt-1">{sub}</div>}
+      <div className="eyebrow flex items-center gap-1.5">
+        {icon}
+        {label}
+      </div>
+      <div className="hud-num text-2xl mt-1.5">
+        <NumberTicker value={value} duration={600} />
+      </div>
+      {sub && <div className="text-[10px] text-muted mt-1 tabular">{sub}</div>}
+    </div>
+  );
+}
+
+function ProgressSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="card p-6 h-44 animate-pulse" />
+      <div className="grid grid-cols-3 gap-2.5">
+        {[0, 1, 2].map((k) => <div key={k} className="surface h-20 animate-pulse" />)}
+      </div>
+      <div className="card p-4 h-16 animate-pulse" />
     </div>
   );
 }

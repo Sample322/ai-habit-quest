@@ -1,3 +1,5 @@
+@import '@fontsource-variable/manrope/index.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,38 +10,149 @@ body,
   height: 100%;
 }
 
+html {
+  background: theme('colors.bg');
+}
+
 body {
   margin: 0;
   font-family: theme('fontFamily.sans');
-  background: theme('colors.bg');
+  background:
+    radial-gradient(60% 80% at 50% 0%, rgba(124, 92, 255, 0.18) 0%, rgba(124, 92, 255, 0) 60%),
+    radial-gradient(80% 50% at 100% 100%, rgba(25, 213, 122, 0.07) 0%, rgba(25, 213, 122, 0) 50%),
+    theme('colors.bg');
+  background-attachment: fixed;
   color: theme('colors.text');
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.005em;
+}
+
+/* Subtle grain on the body so the dark surfaces feel atmospheric, not flat. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.7'/></svg>");
+}
+
+#root {
+  position: relative;
+  z-index: 1;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Make all numbers tabular by default — critical for HUD readability. */
+.tabular,
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
 @layer components {
+  /* Glass-onyx surface. Layered: subtle gradient + 1px hairline + soft shadow. */
   .surface {
-    @apply bg-surface rounded-card p-4;
+    @apply relative bg-surface rounded-card p-4 border border-hairline shadow-soft;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 40%);
   }
+
+  /* Elevated card — for hero rows, premium tiles. */
+  .card {
+    @apply relative bg-elevated rounded-card border border-hairline shadow-card;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 50%);
+  }
+
+  /* Inline label chip — "Сегодня", "Уровень", "Лига". */
+  .eyebrow {
+    @apply text-2xs uppercase font-semibold text-muted tabular;
+    letter-spacing: 0.18em;
+  }
+
+  /* Hairline divider between sections. */
+  .hr {
+    @apply h-px w-full bg-hairline;
+  }
+
+  /* Primary button — gradient + soft glow on press. */
   .btn-primary {
-    @apply w-full rounded-card bg-accent text-accentText font-semibold py-3 px-4 transition active:opacity-80 disabled:opacity-50;
+    @apply relative w-full rounded-pill font-semibold py-3.5 px-5 text-white transition
+           active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100;
+    background-image: theme('backgroundImage.accentGrad');
+    box-shadow: 0 8px 24px -10px rgba(124, 92, 255, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
   }
+
   .btn-ghost {
-    @apply w-full rounded-card bg-transparent text-text border border-white/10 font-medium py-3 px-4 transition active:opacity-80;
+    @apply w-full rounded-pill font-medium py-3 px-5 text-text border border-hairlineStrong
+           bg-white/[0.02] hover:bg-white/[0.04] transition active:scale-[0.98];
+  }
+
+  .btn-link {
+    @apply inline-flex items-center gap-1.5 text-accent font-medium hover:text-accentGlow transition;
+  }
+
+  /* Numeric ticker — big HUD number. */
+  .hud-num {
+    @apply font-display font-bold tabular tracking-tight;
+  }
+
+  /* Shimmer gradient text — used on rare moments (level up, premium). */
+  .shimmer {
+    background: linear-gradient(110deg, #f5f7fb 0%, #c4a6ff 30%, #f5f7fb 60%, #c4a6ff 90%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shine 3.6s linear infinite;
+  }
+
+  /* Aurora layer — for hero sections of premium screens. */
+  .aurora {
+    @apply relative overflow-hidden;
+  }
+  .aurora::before {
+    content: '';
+    position: absolute;
+    inset: -40% -10% auto -10%;
+    height: 80%;
+    background:
+      radial-gradient(50% 60% at 30% 40%, rgba(124, 92, 255, 0.35), transparent 60%),
+      radial-gradient(40% 50% at 80% 60%, rgba(25, 213, 122, 0.18), transparent 60%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .aurora > * {
+    position: relative;
+    z-index: 1;
   }
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+/* Stagger child reveal — apply class to a list, children fade-rise in sequence. */
+.stagger > * {
+  opacity: 0;
+  animation: rise 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 30ms; }
+.stagger > *:nth-child(2) { animation-delay: 90ms; }
+.stagger > *:nth-child(3) { animation-delay: 150ms; }
+.stagger > *:nth-child(4) { animation-delay: 210ms; }
+.stagger > *:nth-child(5) { animation-delay: 270ms; }
+.stagger > *:nth-child(6) { animation-delay: 330ms; }
+.stagger > *:nth-child(7) { animation-delay: 390ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 450ms; }
+
+/* Reduced motion — kill all animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

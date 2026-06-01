@@ -5,17 +5,23 @@ import { t, type Lang } from '../lib/i18n';
 import type { GoalCategory } from '../lib/types';
 import { haptic, notify } from '../lib/telegram';
 import { GoalCreating } from '../components/GoalCreating';
+import { Icon } from '../components/ui/Icons';
 
-// How long to show each stage before advancing, and the hard client-side
-// ceiling for the whole request (a hair above the backend's 90s axios timeout).
 const STAGE_INTERVAL_MS = 2200;
 const CREATE_TIMEOUT_MS = 100_000;
 
-const CATEGORIES: { id: GoalCategory; icon: string }[] = [
-  { id: 'sport', icon: '🏃' },
-  { id: 'study', icon: '📚' },
-  { id: 'discipline', icon: '⏰' },
-  { id: 'custom', icon: '✨' },
+interface CategoryDef {
+  id: GoalCategory;
+  Icon: typeof Icon.sport;
+  accentFrom: string;
+  accentTo: string;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  { id: 'sport', Icon: Icon.sport, accentFrom: '#ff5e6c', accentTo: '#ff8a3d' },
+  { id: 'study', Icon: Icon.study, accentFrom: '#4f8bff', accentTo: '#7c5cff' },
+  { id: 'discipline', Icon: Icon.discipline, accentFrom: '#19d57a', accentTo: '#3ecf8e' },
+  { id: 'custom', Icon: Icon.custom, accentFrom: '#7c5cff', accentTo: '#d57bff' },
 ];
 
 export function Onboarding({
@@ -35,8 +41,6 @@ export function Onboarding({
 
   const stages = i.creating.stages;
 
-  // Pace the visual stages while the (single) create request is in flight,
-  // holding on the last stage until the server responds.
   useEffect(() => {
     if (!submitting) return;
     stageTimer.current = setInterval(() => {
@@ -68,7 +72,6 @@ export function Onboarding({
     const timeout = setTimeout(() => ctrl.abort(), CREATE_TIMEOUT_MS);
     try {
       await api.createGoal(finalTitle, picked, ctrl.signal);
-      // Mark every stage done, hold the success frame briefly, then hand off.
       setStage(stages.length);
       notify('success');
       await new Promise((r) => setTimeout(r, 500));
@@ -84,10 +87,12 @@ export function Onboarding({
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold leading-tight">{i.onboarding.title}</h1>
-        <p className="text-sm text-muted mt-2">{i.onboarding.subtitle}</p>
+    <div className="space-y-6 stagger">
+      {/* Editorial hero — eyebrow + display headline */}
+      <div className="space-y-2">
+        <div className="eyebrow text-accent">{i.appTitle}</div>
+        <h1 className="text-3xl font-bold leading-[1.05] tracking-tight">{i.onboarding.title}</h1>
+        <p className="text-sm text-muted leading-relaxed">{i.onboarding.subtitle}</p>
       </div>
 
       {submitting ? (
@@ -104,34 +109,60 @@ export function Onboarding({
               const labelKey = c.id;
               const label = (i.onboarding as Record<string, string>)[labelKey];
               const sub = (i.onboarding as Record<string, string>)[`${labelKey}Sub`];
+              const active = picked === c.id;
               return (
                 <button
                   key={c.id}
                   onClick={() => { haptic('light'); setPicked(c.id); }}
-                  className={`surface text-left transition border ${
-                    picked === c.id ? 'border-accent' : 'border-transparent'
-                  }`}
+                  className={`group relative overflow-hidden rounded-card border p-4 text-left transition
+                    ${active
+                      ? 'border-accentGlow bg-elevated shadow-glow scale-[1.01]'
+                      : 'border-hairline bg-surface hover:border-hairlineStrong hover:-translate-y-0.5'}
+                  `}
                 >
-                  <div className="text-2xl">{c.icon}</div>
-                  <div className="font-semibold mt-2">{label}</div>
-                  <div className="text-xs text-muted mt-1">{sub}</div>
+                  {/* Category-tinted halo */}
+                  <span
+                    className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-50 transition group-hover:opacity-80"
+                    style={{ background: `radial-gradient(circle, ${c.accentFrom} 0%, transparent 70%)` }}
+                  />
+                  <span
+                    className="relative inline-flex items-center justify-center w-11 h-11 rounded-pill border border-hairlineStrong"
+                    style={{ background: `linear-gradient(135deg, ${c.accentFrom}33, ${c.accentTo}11)` }}
+                  >
+                    <c.Icon size={22} strokeWidth={2} className="text-white" />
+                  </span>
+                  <div className="relative font-semibold mt-3 text-[15px] leading-tight">{label}</div>
+                  <div className="relative text-xs text-muted mt-1 leading-snug">{sub}</div>
+                  {active && (
+                    <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-accent grid place-items-center">
+                      <Icon.check size={12} strokeWidth={3} className="text-white" />
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
 
           {picked && (
-            <div className="surface space-y-3">
-              <label className="text-sm text-muted block">{i.onboarding.titleLabel}</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={i.onboarding.titlePlaceholder}
-                className="w-full bg-bg rounded-card px-4 py-3 outline-none border border-white/5 focus:border-accent"
-              />
-              {error && <div className="text-xs text-danger">{error}</div>}
+            <div className="card p-5 space-y-4 animate-rise">
+              <div>
+                <div className="eyebrow">{i.onboarding.titleLabel}</div>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={i.onboarding.titlePlaceholder}
+                  className="mt-2 w-full bg-bg/60 rounded-card px-4 py-3.5 outline-none border border-hairline focus:border-accent transition text-base placeholder:text-dim"
+                />
+              </div>
+              {error && (
+                <div className="text-xs text-danger flex items-start gap-1.5">
+                  <Icon.close size={12} className="mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               <button onClick={submit} className="btn-primary">
                 {i.onboarding.start}
+                <Icon.chevron size={16} className="inline ml-1 -mr-1 -mt-0.5" />
               </button>
             </div>
           )}

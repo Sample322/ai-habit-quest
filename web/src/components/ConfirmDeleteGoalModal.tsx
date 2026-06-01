@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -72,23 +73,23 @@ export function ConfirmDeleteGoalModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in"
       onClick={submitting ? undefined : onClose}
     >
       <div
-        className="bg-surface w-full max-w-md rounded-t-3xl sm:rounded-card p-6 space-y-4"
+        className="bg-bg w-full max-w-md rounded-t-3xl sm:rounded-card p-6 space-y-4 border border-hairline shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <span>🗑️</span>
-            <span>{i.deleteGoal.title}</span>
-          </h2>
+        <div className="flex items-center gap-3">
+          <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center bg-danger/15 border border-danger/30">
+            <Trash2 size={18} className="text-danger" />
+          </span>
+          <h2 className="text-lg font-bold tracking-tight">{i.deleteGoal.title}</h2>
         </div>
 
-        <div className="surface bg-black/20 rounded-card p-3 space-y-1">
-          <div className="text-xs text-muted uppercase tracking-wider">{i.today.title}</div>
-          <div className="font-semibold truncate">{goalTitle}</div>
+        <div className="surface">
+          <div className="eyebrow">{i.today.title}</div>
+          <div className="font-semibold truncate mt-1">{goalTitle}</div>
         </div>
 
         <div className="text-sm text-text/90 leading-relaxed">{body}</div>
@@ -98,20 +99,20 @@ export function ConfirmDeleteGoalModal({
         )}
         {error && <div className="text-xs text-danger break-words">{error}</div>}
 
-        <div className="flex gap-3 pt-1">
+        <div className="flex gap-2 pt-1">
           <button
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-card py-3 px-4 bg-transparent border border-white/10 text-text/80 font-medium transition active:opacity-80 disabled:opacity-50"
+            className="btn-ghost flex-1"
           >
             {i.deleteGoal.cancel}
           </button>
           <button
             onClick={confirm}
             disabled={submitting || preview === null}
-            className="flex-1 rounded-card py-3 px-4 bg-danger/90 hover:bg-danger text-white font-semibold transition active:opacity-80 disabled:opacity-50"
+            className="flex-1 rounded-pill py-3 px-5 bg-danger text-white font-semibold transition active:scale-[0.98] disabled:opacity-50"
           >
-            {submitting ? '...' : i.deleteGoal.confirm}
+            {submitting ? '…' : i.deleteGoal.confirm}
           </button>
         </div>
       </div>
