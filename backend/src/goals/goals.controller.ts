@@ -5,7 +5,7 @@ import { GoalCategory } from '@prisma/client';
 
 import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
-import { DeletionPreview, DeletionResult, GoalsService, GoalView } from './goals.service';
+import { DeletionPreview, DeletionResult, GoalInsights, GoalsService, GoalView } from './goals.service';
 
 class CreateGoalDto {
   @IsString() @MinLength(2) @MaxLength(120)
@@ -48,6 +48,14 @@ export class GoalsController {
       throw new ForbiddenException({ code: 'premium_required', message: 'Regenerating the plan is a Premium feature.' });
     }
     return this.goals.regeneratePlan(id, me.id);
+  }
+
+  @Get(':id/insights')
+  insights(
+    @CurrentUser() me: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<GoalInsights> {
+    return this.goals.insights(id, me.id);
   }
 
   @Get(':id/delete-preview')

@@ -23,10 +23,9 @@ export interface AuthResult {
 // expires. 2099 is safely below any JS Date overflow and obvious in DB.
 const ADMIN_PREMIUM_UNTIL = new Date('2099-12-31T23:59:59Z');
 
-// Referral rewards: the inviter gets +3 days of Premium per joined friend,
-// capped at 10 rewarded referrals per calendar month (= 30 days/month).
-const REFERRAL_BONUS_DAYS = 3;
-const REFERRAL_MONTHLY_CAP = 10;
+// Referral rewards moved to tasks.service.maybeRewardInviter() — the inviter
+// is now paid only AFTER the invitee completes their first task (D5 anti-abuse).
+// Signup just links the relationship.
 
 @Injectable()
 export class AuthService {
@@ -110,9 +109,10 @@ export class AuthService {
   }
 
   /**
-   * Link a brand-new user to the inviter identified by their referral code,
-   * and grant the inviter +3 days of Premium (capped per month). Returns the
-   * (possibly updated) new user. Safe no-op on unknown/self codes.
+   * Link a brand-new user to the inviter identified by their referral code.
+   * The +3 days Premium reward is NO LONGER granted here — see D5 anti-abuse:
+   * tasks.service.maybeRewardInviter() pays the inviter only after the
+   * invitee completes their first task. Safe no-op on unknown/self codes.
    */
   private async applyReferral(newUser: User, code: string): Promise<User> {
     const inviter = await this.prisma.user.findUnique({ where: { referralCode: code } });
@@ -122,26 +122,7 @@ export class AuthService {
       where: { id: newUser.id },
       data: { referredById: inviter.id },
     });
-
-    const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const monthlyRefs = await this.prisma.user.count({
-      where: { referredById: inviter.id, createdAt: { gte: monthStart } },
-    });
-    if (monthlyRefs > REFERRAL_MONTHLY_CAP) return linked; // monthly cap reached
-
-    // Don't shorten an admin's sentinel "infinite" Premium.
-    if (inviter.premiumUntil && inviter.premiumUntil.getTime() === ADMIN_PREMIUM_UNTIL.getTime()) {
-      return linked;
-    }
-
-    const base = inviter.premiumUntil && inviter.premiumUntil > now ? inviter.premiumUntil : now;
-    const newUntil = new Date(base.getTime() + REFERRAL_BONUS_DAYS * 24 * 60 * 60 * 1000);
-    await this.prisma.user.update({
-      where: { id: inviter.id },
-      data: { isPremium: true, premiumUntil: newUntil },
-    });
-    this.logger.log(`Referral: user ${newUser.id} joined via inviter ${inviter.id} (+${REFERRAL_BONUS_DAYS}d premium)`);
+    this.logger.log(`Referral linked: user ${newUser.id} → inviter ${inviter.id} (reward deferred until first task)`);
     return linked;
   }
 

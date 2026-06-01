@@ -5,6 +5,7 @@ import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { DailyTask, User, BonusTask } from '../lib/types';
 import { ReferralCard } from '../components/ReferralCard';
+import { GoalInsightsModal } from '../components/GoalInsightsModal';
 
 interface TodayProps {
   lang: Lang;
@@ -42,6 +43,7 @@ export function Today({
   const [bonus, setBonus] = useState<BonusTask | null>(null);
   const [bonusBusy, setBonusBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [insightsGoalId, setInsightsGoalId] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const list = await api.todayTasks();
@@ -181,11 +183,16 @@ export function Today({
             onToggle={toggle}
             onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
             onRegenerate={() => regenerate(group.goalId)}
+            onInsights={() => setInsightsGoalId(group.goalId)}
             regenerating={regenGoalId === group.goalId}
             regenDisabled={regenGoalId !== null}
             busyId={busy}
           />
         ))}
+
+      {insightsGoalId && (
+        <GoalInsightsModal lang={lang} goalId={insightsGoalId} onClose={() => setInsightsGoalId(null)} />
+      )}
 
       {!user.isPremium && (
         <button
@@ -271,6 +278,7 @@ function GoalSection({
   onToggle,
   onDelete,
   onRegenerate,
+  onInsights,
   regenerating,
   regenDisabled,
   busyId,
@@ -280,6 +288,7 @@ function GoalSection({
   onToggle: (id: string) => void;
   onDelete: () => void;
   onRegenerate: () => void;
+  onInsights: () => void;
   regenerating: boolean;
   regenDisabled: boolean;
   busyId: string | null;
@@ -292,6 +301,19 @@ function GoalSection({
         <div className="text-[11px] text-muted tabular-nums shrink-0">
           {group.done}/{group.total}
         </div>
+        <button
+          onClick={onInsights}
+          aria-label="Insights"
+          title="Insights"
+          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-muted/60 hover:text-accent hover:bg-accent/10 transition"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
         <button
           onClick={onRegenerate}
           disabled={regenDisabled}

@@ -39,7 +39,7 @@ export class UsersService {
       isPremium: u.isPremium,
       isAdmin: isAdminTelegramId(u.telegramId),
       premiumUntil: u.premiumUntil,
-      streak: { current: u.streakCurrent, best: u.streakBest },
+      streak: { current: u.streakCurrent, best: u.streakBest, freezesLeft: u.streakFreezesLeft },
       xpTotal: u.xpTotal,
       level: u.level,
       referralCode: u.referralCode,

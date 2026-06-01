@@ -84,13 +84,29 @@ export class TasksService {
       },
     });
 
-    const gamification = await this.gamification.recompute(userId);
+    // First-time toggle ever? Reward the inviter (D5 anti-abuse: pay only after
+    // invitee actually does something, not at signup). Best-effort — never
+    // break the toggle flow over a referral hiccup.
+    if (markingDone) {
+      try {
+        await this.maybeRewardInviter(userId);
+      } catch {
+        // ignore — referral is bonus, must not impact core toggle
+      }
+    }
 
     let newAchievements: AchievementView[] = [];
     if (markingDone) {
+      // Compute achievements BEFORE recompute so we can persist UserBadge rows
+      // and let recompute pick up their bonus XP in this same pass.
       const after = await this.computeUserAchievements(userId, lang);
       newAchievements = after.filter((a) => a.earned && !earnedBefore.has(a.code));
+      if (newAchievements.length > 0) {
+        await this.persistEarnedBadges(userId, newAchievements);
+      }
     }
+
+    const gamification = await this.gamification.recompute(userId);
 
     const updated = await this.prisma.dailyTask.findUniqueOrThrow({
       where: { id: task.id },
@@ -106,6 +122,72 @@ export class TasksService {
       },
       newAchievements,
     };
+  }
+
+  /**
+   * D5: reward the inviter (+3d Premium) only after the invitee completes
+   * their FIRST task. Guarded by `referralRewarded` so the bonus fires once.
+   */
+  private async maybeRewardInviter(userId: string): Promise<void> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referredById: true, referralRewarded: true },
+    });
+    if (!u || !u.referredById || u.referralRewarded) return;
+
+    const inviter = await this.prisma.user.findUnique({ where: { id: u.referredById } });
+    if (!inviter) {
+      // Inviter gone — mark rewarded so we don't keep checking.
+      await this.prisma.user.update({ where: { id: userId }, data: { referralRewarded: true } });
+      return;
+    }
+
+    const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z').getTime();
+    if (inviter.premiumUntil && inviter.premiumUntil.getTime() === ADMIN_SENTINEL) {
+      // Don't shorten admin's "infinite" premium.
+      await this.prisma.user.update({ where: { id: userId }, data: { referralRewarded: true } });
+      return;
+    }
+
+    const now = new Date();
+    const base = inviter.premiumUntil && inviter.premiumUntil > now ? inviter.premiumUntil : now;
+    const newUntil = new Date(base.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: inviter.id },
+        data: { isPremium: true, premiumUntil: newUntil },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { referralRewarded: true },
+      }),
+    ]);
+  }
+
+  /**
+   * Persist newly-earned achievements as UserBadge rows. Idempotent — re-runs
+   * skip via the unique (userId, badgeId) PK. The Badge row is upserted lazily
+   * so we don't need a seed migration.
+   */
+  private async persistEarnedBadges(userId: string, achievements: AchievementView[]): Promise<void> {
+    for (const a of achievements) {
+      const badge = await this.prisma.badge.upsert({
+        where: { code: a.code },
+        update: {},
+        create: {
+          code: a.code,
+          title: a.title,
+          description: a.description,
+          iconKey: a.icon,
+        },
+      });
+      await this.prisma.userBadge.upsert({
+        where: { userId_badgeId: { userId, badgeId: badge.id } },
+        update: {},
+        create: { userId, badgeId: badge.id },
+      });
+    }
   }
 
   /** Recompute the user's derived achievements from current stats. */

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { bonusXpFor } from './progress-extras';
 
 interface GamificationState {
   streakCurrent: number;
@@ -26,14 +27,21 @@ export class GamificationService {
     });
 
     // XP = completed daily tasks (within window) + completed Premium bonus tasks
-    // (all-time). Including bonus XP here keeps it from being lost when recompute
-    // overwrites xpTotal on the next task toggle.
+    // (all-time) + first-earn bonuses for achievement UserBadges. Including all
+    // sources here keeps them from being lost when recompute overwrites xpTotal.
     const dailyXp = rows.reduce((sum, r) => sum + r.xpAwarded, 0);
     const bonusAgg = await this.prisma.bonusTask.aggregate({
       where: { userId, doneAt: { not: null } },
       _sum: { xp: true },
     });
-    const xpTotal = dailyXp + (bonusAgg._sum.xp ?? 0);
+    // Achievement bonus XP: stored as UserBadge rows (one per first earn).
+    // Badge.code carries the achievement code; bonusXpFor() maps it to XP.
+    const userBadges = await this.prisma.userBadge.findMany({
+      where: { userId },
+      include: { badge: { select: { code: true } } },
+    });
+    const achievementBonusXp = userBadges.reduce((sum, ub) => sum + bonusXpFor(ub.badge.code), 0);
+    const xpTotal = dailyXp + (bonusAgg._sum.xp ?? 0) + achievementBonusXp;
     const level = computeLevel(xpTotal);
 
     const completedDays = new Set(
@@ -41,6 +49,13 @@ export class GamificationService {
         .filter((r) => r.doneAt !== null)
         .map((r) => r.localDate.toISOString().slice(0, 10)),
     );
+
+    // D1: streak-freeze dates count as "completion" for streak math (but not XP).
+    const freezeUser = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { streakFreezeDates: true },
+    });
+    for (const d of freezeUser.streakFreezeDates) completedDays.add(d);
 
     // Walk backwards from today; count consecutive days that have at least one completion.
     const today = new Date();

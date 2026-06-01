@@ -62,6 +62,13 @@ model User {
   streakBest    Int      @default(0)
   xpTotal       Int      @default(0)
   level         Int      @default(0)
+  // D1: streak freeze — Premium-only restore. Counter resets when month changes.
+  // streakFreezeDates: ISO YYYY-MM-DD strings that recompute treats as "had a completion"
+  streakFreezesLeft  Int      @default(2)
+  streakFreezesMonth String?              // "YYYY-MM" in user's TZ
+  streakFreezeDates  String[] @default([])
+  // D5: anti-abuse — inviter rewarded only after invitee completes first task.
+  referralRewarded Boolean @default(false)
   referralCode  String   @unique
   referredById  String?
   referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
@@ -77,6 +84,7 @@ model User {
   subscriptions Subscription[]
   payments      PaymentEvent[]
   feedback      Feedback[]
+  leagueMembers LeagueMember[]
 
   @@index([referredById])
 }
@@ -224,6 +232,32 @@ model Feedback {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   message   String
   createdAt DateTime @default(now())
+}
+
+// D2: leagues. Weekly groups of ~30 users; XP this week ranks them inside the
+// league. Cron rotates: top 7 promote up a tier, bottom 5 demote, mid stays.
+model League {
+  id          String         @id @default(cuid())
+  tier        Int            // 0 = Bronze, 1 = Silver, ... up to 4 = Diamond
+  weekStart   DateTime       @db.Date  // Monday of the week this league covers
+  createdAt   DateTime       @default(now())
+  members     LeagueMember[]
+
+  @@index([weekStart, tier])
+}
+
+model LeagueMember {
+  id          String   @id @default(cuid())
+  leagueId    String
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyXp    Int      @default(0)
+  joinedAt    DateTime @default(now())
+
+  @@unique([leagueId, userId])
+  @@index([userId])
+  @@index([leagueId, weeklyXp])
 }
 
 model PlanCache {

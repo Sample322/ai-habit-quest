@@ -133,7 +133,14 @@ export function App() {
         />
       )}
 
-      {tab === 'progress' && <Progress lang={lang} user={user} />}
+      {tab === 'progress' && (
+        <Progress
+          lang={lang}
+          user={user}
+          onUserChange={(u) => setUser(u)}
+          onPremiumClick={() => setSubscriptionOpen(true)}
+        />
+      )}
 
       <BottomNav lang={lang} tab={tab} onTabChange={(next) => {
         if (next === 'premium') setSubscriptionOpen(true);

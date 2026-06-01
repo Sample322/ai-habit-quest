@@ -1,10 +1,12 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, ForbiddenException, Get, Post, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from './gamification.service';
+import { LeaguesService } from './leagues.service';
 import { computeRank, computeAchievements } from './progress-extras';
+import { todayLocalDate } from '../tasks/tasks.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -12,7 +14,14 @@ export class GamificationController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
+    private readonly leagues: LeaguesService,
   ) {}
+
+  @Get('leagues/me')
+  leaguesMe(@CurrentUser() me: AuthenticatedUser) {
+    const lang = me.languageCode === 'en' ? 'en' : 'ru';
+    return this.leagues.leaguesMe(me.id, lang);
+  }
 
   @Get('progress')
   async overview(@CurrentUser() me: AuthenticatedUser) {
@@ -56,6 +65,51 @@ export class GamificationController {
     );
 
     return { ...state, last7, rank, achievements, completedTasks };
+  }
+
+  /**
+   * D1: streak-freeze. Premium-only. Restores yesterday if the user has a
+   * charge left this month. Charges reset on month rollover.
+   */
+  @Post('progress/streak-freeze')
+  async streakFreeze(@CurrentUser() me: AuthenticatedUser) {
+    if (!me.isPremium) {
+      throw new ForbiddenException({ code: 'premium_required', message: 'Streak freeze is a Premium feature.' });
+    }
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: me.id } });
+    const today = todayLocalDate(user.timezone);
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(today.getUTCDate() - 1);
+    const yKey = yesterday.toISOString().slice(0, 10);
+    const monthKey = today.toISOString().slice(0, 7);
+
+    // Already frozen → no-op (idempotent).
+    if (user.streakFreezeDates.includes(yKey)) {
+      throw new BadRequestException({ code: 'already_used', message: 'Yesterday is already frozen.' });
+    }
+
+    // Reset monthly counter on rollover.
+    const freshMonth = user.streakFreezesMonth !== monthKey;
+    const left = freshMonth ? 2 : user.streakFreezesLeft;
+    if (left <= 0) {
+      throw new BadRequestException({ code: 'out_of_freezes', message: 'No streak freezes left this month.' });
+    }
+
+    await this.prisma.user.update({
+      where: { id: me.id },
+      data: {
+        streakFreezeDates: { push: yKey },
+        streakFreezesLeft: left - 1,
+        streakFreezesMonth: monthKey,
+      },
+    });
+
+    const after = await this.gamification.recompute(me.id);
+    return {
+      streakCurrent: after.streakCurrent,
+      streakFreezesLeft: left - 1,
+    };
   }
 
   /** Live XP leaderboard: top players + the caller's own rank. */

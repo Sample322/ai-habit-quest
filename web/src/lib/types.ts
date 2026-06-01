@@ -11,7 +11,7 @@ export interface User {
   isPremium: boolean;
   isAdmin: boolean;
   premiumUntil: string | null;
-  streak: { current: number; best: number };
+  streak: { current: number; best: number; freezesLeft: number };
   xpTotal: number;
   level: number;
   referralCode: string;
@@ -60,6 +60,8 @@ export interface RankInfo {
   progressPct: number;
 }
 
+export type AchievementRarity = 'bronze' | 'silver' | 'gold' | 'secret';
+
 export interface Achievement {
   code: string;
   icon: string;
@@ -68,6 +70,9 @@ export interface Achievement {
   target: number;
   current: number;
   earned: boolean;
+  rarity: AchievementRarity;
+  bonusXp: number;
+  hidden: boolean;
 }
 
 export interface ProgressOverview {
@@ -100,6 +105,43 @@ export interface Leaderboard {
 export interface PlanDay {
   day: number;
   tasks: string[];
+}
+
+export interface LeaguesMe {
+  league: {
+    id: string;
+    tier: number;
+    tierName: string;
+    tierIcon: string;
+    weekStart: string;
+    weekEnd: string;
+    daysLeft: number;
+  };
+  myRank: number;
+  myWeeklyXp: number;
+  members: {
+    position: number;
+    id: string;
+    name: string;
+    weeklyXp: number;
+    streak: number;
+    level: number;
+    isMe: boolean;
+  }[];
+  promoteCount: number;
+  demoteCount: number;
+}
+
+export interface GoalInsights {
+  goalId: string;
+  goalTitle: string;
+  horizonDays: number;
+  dayIndex: number;
+  daysSinceStart: number;
+  completedAllTime: number;
+  totalAllTime: number;
+  completionPct: number;
+  heatmap: { date: string; total: number; done: number }[];
 }
 
 export interface BonusTask {

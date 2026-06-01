@@ -42,6 +42,18 @@ export interface DeletionResult {
   };
 }
 
+export interface GoalInsights {
+  goalId: string;
+  goalTitle: string;
+  horizonDays: number;
+  dayIndex: number;             // 1-based day-of-plan; capped at horizonDays
+  daysSinceStart: number;
+  completedAllTime: number;
+  totalAllTime: number;
+  completionPct: number;
+  heatmap: { date: string; total: number; done: number }[];  // last 30 days (oldest first)
+}
+
 @Injectable()
 export class GoalsService {
   private readonly logger = new Logger(GoalsService.name);
@@ -197,6 +209,66 @@ export class GoalsService {
 
     this.logger.log(`Plan regenerated for goalId=${goalId} title="${goal.title}"`);
     return this.findById(goalId, userId);
+  }
+
+  /**
+   * Per-goal insights: 30-day heatmap of task completion + day X of horizon +
+   * all-time completion %. Pure read aggregate; doesn't touch any state.
+   */
+  async insights(goalId: string, userId: string): Promise<GoalInsights> {
+    const goal = await this.findGoalOrThrow(goalId, userId);
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const since = new Date(today);
+    since.setUTCDate(today.getUTCDate() - 29); // 30-day window inclusive
+
+    const rows = await this.prisma.dailyTask.findMany({
+      where: { userId, habit: { goalId }, localDate: { gte: since } },
+      select: { localDate: true, doneAt: true },
+    });
+
+    const byDate = new Map<string, { total: number; done: number }>();
+    for (const r of rows) {
+      const k = r.localDate.toISOString().slice(0, 10);
+      const e = byDate.get(k) ?? { total: 0, done: 0 };
+      e.total++;
+      if (r.doneAt) e.done++;
+      byDate.set(k, e);
+    }
+    const heatmap: GoalInsights['heatmap'] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(since);
+      d.setUTCDate(since.getUTCDate() + i);
+      const k = d.toISOString().slice(0, 10);
+      const e = byDate.get(k) ?? { total: 0, done: 0 };
+      heatmap.push({ date: k, total: e.total, done: e.done });
+    }
+
+    const allTime = await this.prisma.dailyTask.findMany({
+      where: { userId, habit: { goalId } },
+      select: { doneAt: true },
+    });
+    const completedAllTime = allTime.filter((r) => r.doneAt !== null).length;
+    const totalAllTime = allTime.length;
+    const completionPct =
+      totalAllTime === 0 ? 0 : Math.round((completedAllTime / totalAllTime) * 100);
+
+    const MS_PER_DAY = 86_400_000;
+    const daysSinceStart = Math.max(0, Math.floor((Date.now() - goal.startedAt.getTime()) / MS_PER_DAY));
+    const dayIndex = Math.min(daysSinceStart + 1, goal.horizonDays);
+
+    return {
+      goalId: goal.id,
+      goalTitle: goal.title,
+      horizonDays: goal.horizonDays,
+      dayIndex,
+      daysSinceStart,
+      completedAllTime,
+      totalAllTime,
+      completionPct,
+      heatmap,
+    };
   }
 
   private async findGoalOrThrow(goalId: string, userId: string): Promise<Goal> {
