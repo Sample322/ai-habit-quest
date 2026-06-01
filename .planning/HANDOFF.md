@@ -1,264 +1,181 @@
 # AI Habit Quest — Session Handoff
 
-> **Read this first** if you're picking up the project. It's a concise pointer to current state, live URLs, what works, what's broken, and what to do next.
+> **Read this first** when picking up the project. Current state, live URLs, what works, what's broken, what to do next.
 
-## Latest update — 2026-05-31 (session 6)
-
-**AI stub bug fully resolved & verified end-to-end.** Root causes were: (1) stale
-`AI_SERVICE_URL` (`…e620…` → ENOTFOUND) — env corrected to `71a2`; (2) OpenRouter
-routing to geo-blocking provider **WandB** (403 unsupported_country) — added
-`provider.ignore`; (3) OpenRouter **429** rate-limits from shared upstream providers
-(Groq/Novita/DeepInfra) on the cheap `llama-3.1-8b-instruct` model — added retries
-(`OPENAI_MAX_ATTEMPTS=5`). The OpenRouter account is **paid** (`is_free_tier:false`,
-~$5 of $20 left); 429s are upstream-provider shared limits, not balance. After fixes:
-`/ai/diag` 10/10 `openai`, 30-day plans 3/3.
-
-**Shipped this session (all live, all deploys succeeded):**
-- `backend` axios timeout 30→90s; new diagnostic `GET /ai/diag` (backend→ai-service probe).
-- `Dockerfile`: `npm prune --omit=dev` → slim runtime image so the registry pull fits
-  Timeweb's deploy window (fixes the chronic "Build succeeded but container didn't start").
-- `ai-service`: `provider.ignore` + retry loop on 403/429/5xx.
-- `web`: staged **GoalCreating** progress screen + 100s AbortController timeout (replaces the
-  frozen "..." during the 7-60s synchronous generation).
-- `bot`: `/start` button `.webApp()`→`.url()` (fixes 400 BUTTON_URL_INVALID).
-- **NEW: `POST /goals/:id/regenerate-plan`** + per-goal "regenerate" button on Today.
-  Safely replaces a stub plan with a real one (generate-first, only replace if non-stub;
-  re-materialise + gamification recompute). Verified: the owner's stub goal
-  "Убираться в комнате…" was regenerated stub→openai with real title-specific habits/tasks.
-
-**Verified via minted HS256 JWT** (using the live `JWT_SECRET`) against prod — which itself
-proves ⚠ `JWT_SECRET`/`ADMIN_BASIC_PASSWORD` are still dev placeholders and `NODE_ENV=development`;
-**rotate before public launch** (owner action in the Timeweb panel).
-
-**How to drive Timeweb (MCP is non-functional — `spawn npx ENOENT`, no log/deploy tools):**
-use the REST API with `TIMEWEB_TOKEN` from `~/.claude.json`. Apps: backend `200081`,
-ai-service `201299`, web `201439`. `GET /api/v1/apps/{id}/logs?limit=2000`,
-`GET …/deploys`, `GET …/deploy/{deployId}/logs`, `POST …/deploy` body `{"commit_sha":"<40hex>"}`.
+*Last updated: 2026-06-01 (session 8). Owner: Иван (Telegram `888007035`). Repo: `Sample322/ai-habit-quest@master`. HEAD `4c00235`.*
 
 ---
 
 ## Current status — one paragraph
 
-Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (backend NestJS, web React+Vite, ai-service Python FastAPI) plus a Managed PostgreSQL, fed by GitHub auto-deploy from `Sample322/ai-habit-quest@master`. The **day-1 user loop works end-to-end** in Telegram: auth via Telegram WebApp `initData` → goal creation → 7-day plan → daily tasks with streak/XP → goal deletion with cascade + gamification recompute. Two outstanding issues block "Phase 2 done": **(a)** real AI plans via OpenRouter currently fall back to a deterministic stub for unclear reasons — diagnostic logging is shipped but a fresh log capture is needed, **(b)** Timeweb's deploy queue periodically stalls and required manual `Stop → Start` or App recreation more than once. CORS, JWT auth, admin Premium, multi-goal aggregation, the AI cache key, and the "white screen" build bug have all been fixed.
-
-## Live infrastructure
-
-### Apps on Timeweb (current domains)
-
-| App | Domain | Status | Notes |
-|---|---|---|---|
-| `ahq-backend` | `https://sample322-ai-habit-quest-55ff.twc1.net` | Active | NestJS, Prisma, grammy bot, listens on 3001 |
-| `ahq-ai` | `https://sample322-ai-habit-quest-71a2.twc1.net` | Active (recreated once) | FastAPI on 8000, OpenAI-compatible client |
-| `ahq-web` | `https://sample322-ai-habit-quest-0676.twc1.net` | Active (recreated once after build OOM) | Vite SPA served by nginx on 8080 |
-| Managed PostgreSQL | host `188.225.27.176:5432` db `default_db` | Active | TLS required (`sslmode=require`) |
-
-### Other live identities
-
-- Bot in Telegram: `@AI_Habit_Tracking_bot` (token `8638703231:AAFw0lqwXz1hqISinKDmzWFCRXbTc8SUwIc`)
-- GitHub: `https://github.com/Sample322/ai-habit-quest` (branch `master`, auto-deploy via Timeweb GitHub app)
-- Admin Telegram ID (gets infinite Premium): `888007035`
-- OpenRouter account: balance topped up, model `meta-llama/llama-3.1-8b-instruct`
-
-### Required env vars (current expected values)
-
-**`ahq-backend`** — all required for the app to even start are marked ⚠:
-- ⚠ `DATABASE_URL` — `postgresql://gen_user:ankavanya1303-@188.225.27.176:5432/default_db?schema=public&sslmode=require`
-- ⚠ `JWT_SECRET` — 64-hex random
-- ⚠ `TELEGRAM_WEBAPP_BOT_TOKEN` — same as bot token (has fallback to `TELEGRAM_BOT_TOKEN`)
-- ⚠ `ADMIN_BASIC_PASSWORD` — needed when hitting `/admin/*`
-- `TELEGRAM_BOT_TOKEN` — for bot grammy
-- `TELEGRAM_BOT_USERNAME` — `AI_Habit_Tracking_bot`
-- `AI_SERVICE_URL` — `https://sample322-ai-habit-quest-71a2.twc1.net`
-- `ADMIN_TELEGRAM_IDS` — `888007035`
-- `NODE_ENV` — `production`
-- `TZ` — `Europe/Moscow`
-- `BACKEND_PORT` — `3001`
-- `ADMIN_BASIC_USER` — `admin`
-- `FREE_MAX_GOALS` — `1`
-- `FREE_MAX_HABITS` — `3`
-- `FREE_PLAN_HORIZON_DAYS` — `7`
-
-**`ahq-ai`**:
-- `AI_PROVIDER` — `openai`
-- `OPENAI_BASE_URL` — `https://openrouter.ai/api/v1` (default in code if missing)
-- `OPENAI_API_KEY` — `sk-or-v1-b772fda28bc43b...`
-- `OPENAI_MODEL` — `meta-llama/llama-3.1-8b-instruct`
-- `OPENAI_APP_NAME` — `AI Habit Quest`
-- `OPENAI_APP_URL` — `https://sample322-ai-habit-quest-0676.twc1.net`
-- `TZ` — `Europe/Moscow`
-
-**`ahq-web`** (build-time, baked into JS bundle by Vite):
-- `VITE_API_BASE_URL` — `https://sample322-ai-habit-quest-55ff.twc1.net`
-- `VITE_TG_BOT_USERNAME` — `AI_Habit_Tracking_bot`
-
-## What works end-to-end (verified)
-
-- Telegram WebApp `initData` HMAC verification (with `TELEGRAM_BOT_TOKEN` fallback)
-- JWT sessions, `/me`, `/me/preferences`
-- Goal creation with 4 category templates (sport / study / discipline / custom)
-- Plan generation (with cache by `(category, horizon, language, normalised title)`)
-- Habits attached to goal automatically
-- Daily task materialisation for **all active goals** (multi-goal Premium works)
-- Mark task done → XP awarded, streak updated, gamification recomputed
-- 4th-goal-not-showing bug **fixed**: `materialiseTodayForUser` runs on goal creation
-- Goal deletion with cascade + XP recompute + UI confirmation modal + toast
-- Admin Premium grant via `ADMIN_TELEGRAM_IDS` env (idempotent)
-- Telegram bot `/start`, `/help`, `/feedback` commands; `successful_payment` handler ready
-- Web UI grouped by goal on Today screen, premium polish, RU/EN i18n, dark theme
-
-## What's broken / pending — ordered by urgency
-
-### ✅ 1. AI plans falling back to stub — RESOLVED (session 5, 2026-05-30 23:xx)
-**Root cause (proven from backend runtime logs via Timeweb REST API):** the backend's
-`AI_SERVICE_URL` had pointed at a **stale ai-service domain (`…e620…`) that stopped
-resolving** after the app was recreated. axios got `getaddrinfo ENOTFOUND` → silent
-`catch` → `localStubPlan`. That's why ai-service logs showed zero POSTs — the requests
-never left the backend. Log evidence:
-```
-WARN [AiService] ai-service unreachable, falling back to local stub:
-     getaddrinfo ENOTFOUND sample322-ai-habit-quest-e620.twc1.net
-LOG  [PlansService] plan generated ... provider=stub
-```
-
-**Fix:** env `AI_SERVICE_URL` was corrected to the live `…71a2…` (already done in the
-panel), and the code was hardened:
-- `ai.service.ts` axios `timeout 30s → 90s` (ai-service budgets 60s for the LLM call;
-  30s cut off legitimate slow Premium 30-day generations).
-- New **`GET /ai/diag`** endpoint: backend-side probe of ai-service reachability + a
-  sample generation. Catches a future domain change instantly instead of via stub plans.
-- `AiPlanResponse.provider` now includes `'openai'`.
-
-**Verified end-to-end** — `curl https://…55ff…/ai/diag` returns:
-`{"sample":{"ok":true,"provider":"openai","scheduleDays":7,"ms":7087}}` → real Llama plan.
-
-**Note:** goals that ALREADY got a stub plan keep it (stored in `Plan` table; the cache
-only ever stored non-stub). Only **new** goals get a real plan. Delete + recreate any old
-stub goals to refresh them.
-
-**Deploy-pipeline fix (same session):** deploys were chronically marked "failed" because
-the runtime Docker image shipped the full `node_modules` (typescript, webpack via
-`@nestjs/cli`, ts-loader, …) → registry pull took ~4.5 min and blew Timeweb's deploy
-window even though the container started fine. `backend/Dockerfile` now runs
-`npm prune --omit=dev` after build (and `prisma` moved to prod deps since the startup CMD
-runs `prisma db push`). Slim image now deploys cleanly.
-
-**How to drive Timeweb now:** the `timeweb` MCP server is NOT functional (spawn npx
-ENOENT) and has no log/deploy tools anyway. Use the **REST API directly** with the
-`TIMEWEB_TOKEN` from `~/.claude.json` — it works:
-- list apps: `GET https://api.timeweb.cloud/api/v1/apps` (backend id `200081`, ai `201299`, web `201439`)
-- runtime logs: `GET /api/v1/apps/{id}/logs?limit=2000` → `{app_logs:[...]}`
-- deploy list: `GET /api/v1/apps/{id}/deploys`
-- deploy logs: `GET /api/v1/apps/{id}/deploy/{deploy_id}/logs`
-- trigger redeploy: `POST /api/v1/apps/{id}/deploy` body `{"commit_sha":"<40-hex>"}`
-
-### 🟡 2. Telegram Stars payment integration not yet tested end-to-end
-**Code is ready** (`bot.service.ts` listens for `pre_checkout_query` + `:successful_payment`, calls `payments.handleStarsSuccessFromBot`), but `TELEGRAM_STARS_ENABLED=false` in backend env. Owner currently has admin Premium so no need yet. To activate: flip env to `true` + redeploy backend + buy 250 Stars in BotFather → test invoice.
-
-### 🟡 3. YooKassa integration is stubbed
-`yookassa.provider.ts` returns mock URLs when credentials missing. When the user registers as self-employed / IP and gets a YooKassa shop, plug in `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` + `YOOKASSA_RETURN_URL` and Phase 3 monetization unlocks.
-
-### 🟡 4. Wave 2 work not yet done
-Tasks deferred to next session:
-- Privacy policy + ToS stub pages linked from Subscription modal
-- Referral link UI ("Пригласи друга → +3 дня Premium")
-- `/admin/stats` endpoint for self-analytics (signups, plans, completions, conversions)
-- Better `/start` and bot menu polish
-- Submission package for Telegram-Mini-App catalogs (appss.pro, MiniTelegram)
-
-### 🟡 5. Backend uses `prisma db push`, not migrations
-On every deploy, `npx prisma db push --skip-generate --accept-data-loss` runs. For Phase-1/2 this is fine — schema changes are still rapid. Before public launch with paying users, generate proper migrations: `prisma migrate dev --name baseline` once, switch CMD to `prisma migrate deploy`.
-
-## Known Timeweb quirks (operational lessons)
-
-1. **Env var changes don't auto-redeploy**. After editing env in the panel, click **Развернуть заново** or push a no-op commit.
-2. **`HEALTHCHECK` directives in our Dockerfiles fight Timeweb's injected healthcheck** → deploys stuck in `starting`. We removed ours from all three Dockerfiles. Don't add them back.
-3. **`tsc -b && vite build` may OOM** on the 1 GB tier (we hit silent OOM at least twice on web). Web build script is now `vite build` only.
-4. **Parallel deploys race** when you push 2-3 commits in 10 minutes. Each push triggers all 3 Apps. If something gets stuck, **Stop → Start** on the affected App usually fixes it.
-5. **Ports 80/443 are reserved** by Timeweb's reverse proxy. Web's nginx listens on `8080`. Don't change this.
-6. **CORS** — backend uses `origin: true, credentials: false` with explicit `methods` and `allowedHeaders`. `credentials: true` broke fetch from the Telegram WebView.
-7. **Image pull can take 5-15 minutes** between `Build succeeded` and `Container started`. Don't panic before 15 min.
-
-## How to drive Timeweb from a new Claude session
-
-The Timeweb MCP server is now configured in `~/.claude.json`:
-```jsonc
-{
-  "mcpServers": {
-    "timeweb": {
-      "command": "npx",
-      "args": ["-y", "timeweb-mcp-server"],
-      "env": { "TIMEWEB_TOKEN": "<JWT from Timeweb panel API page>" }
-    }
-  }
-}
-```
-
-After full restart of Claude Code, available tools should include `list_projects`, `list_deployments`, `get_deployment_build_logs`, `get_runtime_logs`, etc. — directly callable without screenshots or downloaded log files.
-
-## Commit history (recent first)
-
-```
-9e508fd fix(web): drop conflicting Dockerfile HEALTHCHECK
-f6ee92a fix(web): drop tsc from build script (OOM fix)
-7f26901 diag: log raw ai-service responses + openrouter status codes
-e7a6161 fix(cors): explicit CORS config
-5592b19 chore: trigger clean redeploy of all apps
-129b486 feat(goals): materialise tasks on goal creation + hard delete with XP/streak recompute + UI confirm modal
-879c3ed fix(today): multi-goal task aggregation + cache-by-title + grouped UI + premium polish
-83b42e8 feat(web): add 'Create another goal' button + modal
-5475dd8 feat(web): show 'Premium active' state in modal + Premium badge in header
-9e3b009 feat(auth): ADMIN_TELEGRAM_IDS grants infinite Premium
-fa76a45 feat(auth): TELEGRAM_WEBAPP_BOT_TOKEN falls back to TELEGRAM_BOT_TOKEN
-5f9ff72 diag: surface specific initData failure reason on server log + client diag panel
-533d1df docs: close Phase 1 — day-1 loop verified end-to-end on Timeweb
-e673ab0 feat: OpenAI-compatible AI provider (OpenRouter) + Telegram Stars bot payments + richer /start
-```
-
-## How to test the live app
-
-1. Open Telegram → search `@AI_Habit_Tracking_bot` → press `/start`
-2. Tap the **«Открыть AI Habit Quest»** button (chat menu button, bottom left near the message input)
-3. Telegram WebView loads `https://sample322-ai-habit-quest-0676.twc1.net` with `initData`
-4. App auto-authenticates → admin gets infinite Premium → goal selector / Today screen / Progress / Premium tabs
-
-If white screen:
-- Hard-close Telegram (swipe from task switcher)
-- Long-press bot avatar → Clear cache
-- Reopen
-
-If "Failed to fetch":
-- Backend CORS: already fixed, but if it ever resurfaces, check `backend/src/main.ts` line ~10
-
-## Project planning artifacts
-
-All in `.planning/`:
-- `PROJECT.md` — original vision, what we are building and why
-- `REQUIREMENTS.md` — 40 REQ-IDs grouped by category
-- `ROADMAP.md` — 4 phases (Phase 1 ✅ closed, Phase 2 mostly shipped, Phase 3 & 4 pending)
-- `STATE.md` — current phase + open follow-ups
-- `DEPLOY-TIMEWEB.md` — full step-by-step Timeweb deploy guide (still accurate, but note ahq-web/ai recreations changed domains)
-- `research/SUMMARY.md` — stack/features/architecture/pitfalls research from project init
-- `config.json` — GSD workflow config
-- `HANDOFF.md` — this file
-
-## Suggested next steps for the new session
-
-In rough priority:
-
-1. **Use the Timeweb MCP to fetch live runtime logs from `ahq-backend` and `ahq-ai`**, then create a new goal in the Mini App to force a `/generate-plan` call. The new diagnostic logging (commit `7f26901`) will reveal why plans are stub. Fix it.
-
-2. **Verify everything else is healthy** through the MCP — check there are no failed deploys queued, all three Apps `Active`, env vars match the table above.
-
-3. **Resume Wave 2:**
-   - Privacy policy + ToS templates for RU/CIS
-   - Referral link UI + small share-card screen
-   - `/admin/stats` endpoint and a minimal admin dashboard page
-   - Polish `/start` flow with better illustrations / CTA
-
-4. **Generate a proper Prisma baseline migration** and switch CMD from `db push` to `migrate deploy`.
-
-5. **Prepare the catalog submission** (appss.pro + MiniTelegram): pick screenshots, write a one-paragraph product description, define the bot landing page.
+Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (backend NestJS, web React+Vite, ai-service Python FastAPI) + Managed PostgreSQL, auto-deployed from GitHub. **Full day-1 loop works end-to-end:** Telegram `initData` auth → goal creation → real AI plan (OpenRouter/Llama) → daily tasks with streak/XP → goal delete with cascade. Shipped since launch: real AI plans (stub bug fixed), Prisma migrations, secret rotation, rate-limiting, in-app admin, referral program, Privacy/ToS, ranks + achievements + leaderboard, Premium gating, and Premium AI micro-tasks. **One real blocker remains: the Telegram bot can't reliably reach `api.telegram.org` from the RU host** (Telegram blocked in RU) — long-polling eventually connects but flaps ~10 min after each backend restart, and webhook is unreachable. This blocks Stars payments + bot reminders, not the Mini App itself (Mini App loads via user's own VPN).
 
 ---
 
-*Last updated: 2026-05-30 evening of session 4. Owner: Иван (Telegram `888007035`). Repository: `Sample322/ai-habit-quest`.*
+## Live infrastructure
+
+| App | id | Domain | Notes |
+|---|---|---|---|
+| `ahq-backend` | `200081` | `https://sample322-ai-habit-quest-55ff.twc1.net` | NestJS, Prisma, grammy bot (long-polling), port 3001 |
+| `ahq-ai` | `201299` | `https://sample322-ai-habit-quest-71a2.twc1.net` | FastAPI port 8000, OpenAI-compatible client |
+| `ahq-web` | `201439` | `https://sample322-ai-habit-quest-0676.twc1.net` | Vite SPA via nginx, `index.html` served `no-cache` |
+| Managed PostgreSQL | — | `188.225.27.176:5432` db `default_db` | TLS required (`sslmode=require`) |
+
+- Bot: `@AI_Habit_Tracking_bot` (token `8638703231:AAFw0lqwXz1hqISinKDmzWFCRXbTc8SUwIc`)
+- Admin Telegram ID: `888007035` (infinite Premium + in-app admin access)
+- OpenRouter: **paid** account (`is_free_tier:false`, ~$5 of $20 left), model `meta-llama/llama-3.1-8b-instruct`
+- Owner legal (in Privacy/ToS): Галкин Иван Александрович, самозанятый, ИНН `526223011902`, `ivan.galkin13@gmail.com`
+
+---
+
+## Driving Timeweb
+
+**Use the `tw` CLI helper** — `node ~/.claude/scripts/tw.mjs <cmd>`. Wraps the REST API; pulls token from `~/.claude.json` → `mcpServers.timeweb.env.TIMEWEB_TOKEN` (or `$TIMEWEB_TOKEN`).
+
+Common commands:
+- `tw apps` — list 3 apps with status + domain
+- `tw info backend` — full app info incl. envs + start_time + ip (name-prefix match works: `backend|ai|web`)
+- `tw logs backend [N]` — runtime logs (default 200 lines, ANSI stripped)
+- `tw tail backend` — stream new log lines (polls every 4s)
+- `tw deploys backend [N]` — deploy history
+- `tw dlogs backend [deployId]` — deploy logs (defaults to newest)
+- `tw deploy backend [sha]` — trigger deploy (sha defaults to `git rev-parse HEAD`)
+- `tw wait-deploy backend [timeoutSec]` — block until success/failure/stopped (exit 3 on fail, 4 on timeout)
+- `tw envs backend [--show]` — list env vars (secret-named keys redacted by default)
+- `tw set-env backend KEY=VAL ...` — patch envs (merge, preserves existing)
+- `tw rm-env backend KEY ...` — drop keys
+
+Flag `--json` for machine-readable output where applicable.
+
+The `timeweb` MCP server itself is now working but only exposes VCS-provider + create-app + presets tools — useless for ops. Use `tw` for everything operational.
+
+Raw REST endpoints behind the wrapper (for reference):
+- list apps: `GET /api/v1/apps`
+- app info + envs: `GET /api/v1/apps/{id}`
+- runtime logs: `GET /api/v1/apps/{id}/logs?limit=N` → `{app_logs:[...]}`
+- deploy list: `GET /api/v1/apps/{id}/deploys` (newest first; statuses: `building`→`prepare`→`image_pulled`→`container_started`→`success`/`failure`/`stopped`)
+- deploy logs: `GET /api/v1/apps/{id}/deploy/{deployId}/logs` → `{deploy_logs:[...]}`
+- trigger deploy: `POST /api/v1/apps/{id}/deploy` body `{"commit_sha":"<40-hex>"}`
+- patch envs: `PATCH /api/v1/apps/{id}` body `{"envs":{...}}` (merge model; restart NOT triggered automatically — trigger a deploy to apply)
+- ❌ restart: no exposed REST endpoint — trigger a deploy or use the panel
+
+**Deploy auth/verify trick:** can't test authed endpoints via Telegram from a script, so mint an HS256 JWT with the live `JWT_SECRET` and `sub=<userId>`:
+```js
+const c=require('crypto');const b=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
+const n=Math.floor(Date.now()/1000);
+const d=b({alg:'HS256',typ:'JWT'})+'.'+b({sub:USER_ID,iat:n,exp:n+604800});
+const jwt=d+'.'+c.createHmac('sha256',JWT_SECRET).update(d).digest('base64url');
+```
+Admin user id: `cmppnbehu000111u029hid5l0`. JWT_SECRET (rotated): `59c399a78b1751f1bb67a994fcc6aa497be02f8dcbd700c9dfba90c875169f8f`.
+
+### Deploy gotchas (operational lessons)
+1. **Any push redeploys ALL 3 apps** (Timeweb has no path filter). A web-only change still restarts the backend → bot flaps ~10 min. To avoid: disable auto-deploy on `ahq-backend` in panel, deploy it manually.
+2. **Parallel/rapid deploys race** → one gets `stopped`/`failure`. Trigger ONE clean deploy and wait. The metadata `commit_sha` can show a commit while the last *successful* deploy is older — always check `deploys[0].status==success`.
+3. **Slim runtime image** (`npm prune --omit=dev` in backend Dockerfile) — keep it; full node_modules made the registry pull blow the deploy window.
+4. **No HEALTHCHECK in Dockerfiles** — fights Timeweb's injected one. Don't add.
+5. **Ports 80/443 reserved**; web nginx listens 8080. Don't change.
+6. **`bun`/`tsc` OOM** on 1GB tier — web build is `vite build` only.
+7. After deploy, container cutover lags; verify on the deploy that reaches `success`, not the first poll tick.
+
+---
+
+## Env vars (current, live)
+
+**`ahq-backend`** (⚠ = required to boot):
+- ⚠ `DATABASE_URL` `postgresql://gen_user:ankavanya1303-@188.225.27.176:5432/default_db?schema=public&sslmode=require`
+- ⚠ `JWT_SECRET` (rotated, see above) · ⚠ `TELEGRAM_WEBAPP_BOT_TOKEN` (=bot token) · ⚠ `ADMIN_BASIC_PASSWORD` `mmELlIAkKgexpDYHeI2daQGB`
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME=AI_Habit_Tracking_bot`
+- `AI_SERVICE_URL=https://sample322-ai-habit-quest-71a2.twc1.net`
+- `ADMIN_TELEGRAM_IDS=888007035`, `NODE_ENV=production`, `TZ=Europe/Moscow`, `BACKEND_PORT=3001`, `ADMIN_BASIC_USER=admin`
+- `FREE_MAX_GOALS=1`, `FREE_MAX_HABITS=3`, `FREE_PLAN_HORIZON_DAYS=7`
+- `TELEGRAM_WEBHOOK_URL` — **must stay UNSET** (webhook unreachable on RU host; unset = long-polling)
+- Stale/unused: `AI_PROVIDER=stub` (backend ignores it — harmless, can delete)
+
+**`ahq-ai`**:
+- `AI_PROVIDER=openai`, `OPENAI_API_KEY=sk-or-v1-...`, `OPENAI_MODEL=meta-llama/llama-3.1-8b-instruct`
+- `OPENAI_BASE_URL=https://openrouter.ai/api/v1`, `OPENAI_APP_NAME`, `OPENAI_APP_URL`, `TZ`
+- optional tuning: `OPENROUTER_IGNORE_PROVIDERS` (default `wandb`), `OPENAI_MAX_ATTEMPTS` (default 5), `OPENAI_RETRY_DELAY` (1.0)
+
+**`ahq-web`** (build-time, baked by Vite):
+- `VITE_API_BASE_URL=https://sample322-ai-habit-quest-55ff.twc1.net`
+- `VITE_TG_BOT_USERNAME=AI_Habit_Tracking_bot`
+
+---
+
+## What works end-to-end (verified)
+
+- Telegram `initData` HMAC auth → JWT sessions, `/me` (returns `isAdmin`, `referralCode`, `referralCount`)
+- Goal creation (4 categories) → **real AI plan** (OpenRouter/Llama), habits + daily tasks materialised for all active goals
+- Mark task done → XP/streak/level recompute; goal delete with cascade + recompute + confirm modal
+- **`/ai/diag`** — backend→ai-service probe (provider + latency); use to confirm AI health
+- **Plan regeneration** `POST /goals/:id/regenerate-plan` — Premium-only; generate-first, only replace if non-stub
+- **In-app admin** (🛠 header button, admin only): `/app-admin/stats|users|users/:id/premium|feedback`. Also Basic-auth `/admin/*` + `/admin/dashboard` HTML.
+- **Referral**: `t.me/AI_Habit_Tracking_bot?startapp=ref_<code>`; inviter +3d Premium on invitee's FIRST signup (self-invite blocked, cap 10/mo). Card on Today (share/copy).
+- **Gamification**: ranks (Новичок→Легенда) w/ XP-to-next, 11 derived achievements (+unlock toast on toggle), live leaderboard (top 20 + my rank) — all on revamped Progress screen.
+- **Premium AI micro-task** (`/bonus/today`, `/bonus/:id/complete`): 1 daily AI stretch action, +25 XP, expires end of day, lazy-generated on Today open (no bot dependency). Premium-only.
+- Privacy/ToS pages live (`/privacy.html`, `/terms.html`, RU+EN, real legal data), linked from Premium screen.
+- Web: RU/EN i18n, dark theme, staged goal-creation progress screen, no-cache index.
+
+---
+
+## What's broken / pending — by urgency
+
+### 🔴 1. Bot ↔ Telegram connectivity (RU host) — the launch blocker
+Telegram blocked in RU; backend on Timeweb RU host can't reliably reach `api.telegram.org`. Long-polling eventually connects (~10 min after restart) but flaps; webhook gets `Connection timed out` from Telegram. **Mini App unaffected** (loads via user VPN). **Blocks:** Stars payments + bot reminders.
+**Fix options (core stays on RU):** (a) move thin bot layer to **Cloudflare Workers** (free, global, webhook both ways) calling back to RU backend for data; (b) route bot's Telegram calls through a non-RU SOCKS5/HTTPS proxy (grammy supports it). Webhook code already exists but is reverted to long-polling — see `bot.service.ts`.
+
+### 🟡 2. Telegram Stars — code ready, not activated
+`bot.service.ts` handles `pre_checkout_query` + `:successful_payment` → `payments.handleStarsSuccessFromBot` (idempotent). Blocked by #1. Activate after bot is reliable.
+
+### 🟡 3. YooKassa — stubbed
+`yookassa.provider.ts` returns mock URLs without creds. Owner is now самозанятый → can get a YooKassa shop. Plug `YOOKASSA_SHOP_ID`/`YOOKASSA_SECRET_KEY`/`YOOKASSA_RETURN_URL`, implement real `/v3/payments` call (currently throws "not yet implemented").
+
+### 🟡 4. Catalog submission — guide ready, needs assets
+`.planning/CATALOG-SUBMISSION.md` has texts/checklist. Owner action: icon 512×512 + 3-5 screenshots; enable Main Mini App in BotFather (URL = web domain) so `?startapp=` links open.
+
+### 🟡 5. Reminders cron — exists, untested + bot-dependent
+Delivery via bot → blocked by #1.
+
+---
+
+## Next-session ideas (designed, not built)
+
+See `.planning/IDEAS-NEXT.md` for full design. Highlights:
+- Achievement rarity/secret badges; Premium-only achievements + avatar frames/titles.
+- Per-goal progress: 30-day heatmap, "day X of horizon", weekly recap.
+- **Streak-freeze** (Premium, needs migration).
+- **Leagues** (Duolingo-style weekly groups) — strongest retention.
+- Referral anti-abuse: reward inviter only after invitee's first completed task (needs `User.referralRewarded`, migration).
+
+---
+
+## DB / migrations
+
+Prod DB is on **Prisma Migrate** now (baseline `0_init` resolved-as-applied; Dockerfile CMD = `prisma migrate deploy && node dist/main.js`). **No more `db push --accept-data-loss`.** To add schema: edit `schema.prisma`, generate migration via `prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url <db>?schema=ahq_shadow --script > prisma/migrations/<name>/migration.sql`, commit, deploy. Latest migration: `20260601_add_bonus_task`. `migration_lock.toml` present (`postgresql`).
+
+## How to test live
+
+1. Telegram → `@AI_Habit_Tracking_bot` → `/start` → tap menu button → Mini App loads `…0676…` with `initData`.
+2. Admin auto-Premium; create goal → staged progress → real plan. Today/Progress/Premium tabs + 🛠 admin.
+3. On PC (Telegram Desktop): ⋮ → **Reload Page** to pull fresh bundle (index is no-cache).
+4. White screen / Failed to fetch right after a backend deploy = container restarting; wait ~1-2 min.
+
+## Planning artifacts (`.planning/`)
+`PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md`, `DEPLOY-TIMEWEB.md`, `CATALOG-SUBMISSION.md`, `IDEAS-NEXT.md`, `research/SUMMARY.md`, `HANDOFF.md` (this file). Local helper: `C:\Users\Галкин Иван\uat.mjs` (mints JWT, runs core UAT against prod).
+
+## Recent commits (newest first)
+```
+4c00235 feat(web): AI bonus card on Today + achievement-unlock toast
+dd8ce97 feat(bonus): Premium AI micro-task (BonusTask model+migration, lazy gen, +XP) + achievement detection in toggle
+ca6f35f feat(ai-service): /bonus-task endpoint — daily AI stretch action
+9ba594c feat(web): Progress revamp UI — rank card, achievements grid, leaderboard
+ae4ee07 feat(gamification): ranks, derived achievements, live leaderboard; gate regenerate to Premium
+6df4aa4 fix(links): Main Mini App deep link (t.me/bot?startapp=) for referral + start
+463171a fix(web): pass onAdminClick to main-view Header so admin gear shows
+3f98809 feat(web): referral card on Today
+689760d feat(referral): reward inviter +3d Premium on signup; fix referredById
+10c5c7e feat(web): in-app Admin screen + fix Progress chart bars
+c49b610 feat(admin): in-app admin API via JWT + admin Telegram ID
+9016324/f186531 docs(legal): Privacy/ToS operator data
+(earlier: Prisma migrations baseline, rate-limiting+webhook, secret rotation, OpenRouter retries/provider.ignore, slim Docker image, /ai/diag, regenerate-plan)
+```
