@@ -30,6 +30,29 @@ export class AiService {
   }
 
   /**
+   * Ask ai-service for one optional "stretch" bonus action for today.
+   * Returns null on any failure so the caller can simply skip the bonus.
+   */
+  async generateBonusTask(req: {
+    category: string;
+    goalTitle: string;
+    language: 'ru' | 'en';
+    recentTitles: string[];
+  }): Promise<{ provider: string; title: string; xp: number } | null> {
+    try {
+      const resp = await this.http.post('/bonus-task', req);
+      const data = resp.data as { provider?: string; title?: string; xp?: number };
+      if (resp.status < 400 && data && typeof data.title === 'string' && data.title.length > 0) {
+        return { provider: data.provider ?? 'stub', title: data.title, xp: data.xp ?? 25 };
+      }
+      this.logger.warn(`bonus-task bad response status=${resp.status}`);
+    } catch (err) {
+      this.logger.warn(`bonus-task unreachable: ${(err as Error).message}`);
+    }
+    return null;
+  }
+
+  /**
    * Connectivity + end-to-end diagnostic for the backend -> ai-service path.
    * No secrets are returned. Lets us confirm — without creating a goal — that
    * the backend can reach ai-service and get a real (non-stub) plan back.

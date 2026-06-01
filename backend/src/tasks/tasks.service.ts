@@ -4,6 +4,7 @@ import { DailyTask, Goal, GoalStatus, Habit, Plan } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { AiPlanResponse } from '../ai/ai.types';
+import { computeAchievements, type AchievementView } from '../gamification/progress-extras';
 
 const XP_PER_TASK = 10;
 const MS_PER_DAY = 86_400_000;
@@ -54,6 +55,7 @@ export class TasksService {
   ): Promise<{
     task: DailyTaskView;
     user: { streakCurrent: number; xpTotal: number; level: number };
+    newAchievements: AchievementView[];
   }> {
     const task = await this.prisma.dailyTask.findFirst({ where: { id: taskId, userId } });
     if (!task) throw new NotFoundException('Task not found');
@@ -66,6 +68,14 @@ export class TasksService {
       throw new BadRequestException("Only today's tasks can be toggled");
     }
 
+    // Snapshot earned achievements BEFORE the change so we can report any that
+    // become newly earned (only meaningful when marking done, not undo).
+    const markingDone = !task.doneAt;
+    const lang = user.languageCode === 'en' ? 'en' : 'ru';
+    const earnedBefore = markingDone
+      ? new Set((await this.computeUserAchievements(userId, lang)).filter((a) => a.earned).map((a) => a.code))
+      : new Set<string>();
+
     await this.prisma.dailyTask.update({
       where: { id: task.id },
       data: {
@@ -75,6 +85,12 @@ export class TasksService {
     });
 
     const gamification = await this.gamification.recompute(userId);
+
+    let newAchievements: AchievementView[] = [];
+    if (markingDone) {
+      const after = await this.computeUserAchievements(userId, lang);
+      newAchievements = after.filter((a) => a.earned && !earnedBefore.has(a.code));
+    }
 
     const updated = await this.prisma.dailyTask.findUniqueOrThrow({
       where: { id: task.id },
@@ -88,7 +104,22 @@ export class TasksService {
         xpTotal: gamification.xpTotal,
         level: gamification.level,
       },
+      newAchievements,
     };
+  }
+
+  /** Recompute the user's derived achievements from current stats. */
+  private async computeUserAchievements(userId: string, lang: 'ru' | 'en'): Promise<AchievementView[]> {
+    const [u, completedTasks, goals, referrals] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { xpTotal: true, streakBest: true } }),
+      this.prisma.dailyTask.count({ where: { userId, doneAt: { not: null } } }),
+      this.prisma.goal.count({ where: { userId } }),
+      this.prisma.user.count({ where: { referredById: userId } }),
+    ]);
+    return computeAchievements(
+      { xpTotal: u.xpTotal, streakBest: u.streakBest, completedTasks, goals, referrals },
+      lang,
+    );
   }
 
   /**

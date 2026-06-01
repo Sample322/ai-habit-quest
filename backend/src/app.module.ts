@@ -18,6 +18,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { BotModule } from './bot/bot.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
+import { BonusModule } from './bonus/bonus.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AdminModule } from './admin/admin.module';
     BotModule,
     PaymentsModule,
     AdminModule,
+    BonusModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

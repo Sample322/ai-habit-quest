@@ -25,7 +25,15 @@ export class GamificationService {
       orderBy: { localDate: 'desc' },
     });
 
-    const xpTotal = rows.reduce((sum, r) => sum + r.xpAwarded, 0);
+    // XP = completed daily tasks (within window) + completed Premium bonus tasks
+    // (all-time). Including bonus XP here keeps it from being lost when recompute
+    // overwrites xpTotal on the next task toggle.
+    const dailyXp = rows.reduce((sum, r) => sum + r.xpAwarded, 0);
+    const bonusAgg = await this.prisma.bonusTask.aggregate({
+      where: { userId, doneAt: { not: null } },
+      _sum: { xp: true },
+    });
+    const xpTotal = dailyXp + (bonusAgg._sum.xp ?? 0);
     const level = computeLevel(xpTotal);
 
     const completedDays = new Set(
