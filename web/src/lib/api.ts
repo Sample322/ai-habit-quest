@@ -1,6 +1,6 @@
 import type {
   DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory,
-  AdminStats, AdminUser, AdminFeedback, Leaderboard,
+  AdminStats, AdminUser, AdminFeedback, Leaderboard, Achievement, BonusTask,
 } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
@@ -94,11 +94,16 @@ export const api = {
     request<{
       task: DailyTask;
       user: { streakCurrent: number; xpTotal: number; level: number };
+      newAchievements: Achievement[];
     }>(`/tasks/${id}/toggle`, { method: 'POST' }),
 
   progress: () => request<ProgressOverview>('/progress'),
 
   leaderboard: () => request<Leaderboard>('/leaderboard'),
+
+  bonusToday: () => request<BonusTask | null>('/bonus/today'),
+  completeBonus: (id: string) =>
+    request<{ bonus: BonusTask; xpTotal: number }>(`/bonus/${id}/complete`, { method: 'POST' }),
 
   prices: () => request<{ trialPriceRub: number; monthlyPriceRub: number; premiumStars: number }>('/payments/prices'),
 

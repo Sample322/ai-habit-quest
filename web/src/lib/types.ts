@@ -102,6 +102,13 @@ export interface PlanDay {
   tasks: string[];
 }
 
+export interface BonusTask {
+  id: string;
+  title: string;
+  xp: number;
+  doneAt: string | null;
+}
+
 export interface AdminStats {
   generatedAt: string;
   users: { total: number; premium: number; new24h: number; new7d: number };

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
-import type { DailyTask, User } from '../lib/types';
+import type { DailyTask, User, BonusTask } from '../lib/types';
 import { ReferralCard } from '../components/ReferralCard';
 
 interface TodayProps {
@@ -39,6 +39,9 @@ export function Today({
   const [busy, setBusy] = useState<string | null>(null);
   const [regenGoalId, setRegenGoalId] = useState<string | null>(null);
   const [regenMsg, setRegenMsg] = useState<string | null>(null);
+  const [bonus, setBonus] = useState<BonusTask | null>(null);
+  const [bonusBusy, setBonusBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const list = await api.todayTasks();
@@ -47,7 +50,31 @@ export function Today({
 
   useEffect(() => {
     void load();
+    // Bonus is premium-only; backend returns null otherwise. Non-fatal.
+    void (async () => { try { setBonus(await api.bonusToday()); } catch { /* ignore */ } })();
   }, [load]);
+
+  async function completeBonus(): Promise<void> {
+    if (!bonus || bonus.doneAt || bonusBusy) return;
+    setBonusBusy(true);
+    haptic('medium');
+    try {
+      const { bonus: updated, xpTotal } = await api.completeBonus(bonus.id);
+      setBonus(updated);
+      onUserChange({ ...user, xpTotal });
+      notify('success');
+      showToast(`✨ +${updated.xp} XP`);
+    } catch {
+      notify('error');
+    } finally {
+      setBonusBusy(false);
+    }
+  }
+
+  function showToast(msg: string): void {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
 
   async function regenerate(goalId: string): Promise<void> {
     if (regenGoalId) return;
@@ -77,7 +104,7 @@ export function Today({
     setBusy(id);
     haptic('light');
     try {
-      const { task, user: snap } = await api.toggleTask(id);
+      const { task, user: snap, newAchievements } = await api.toggleTask(id);
       setTasks((prev) => prev?.map((t) => (t.id === task.id ? task : t)) ?? null);
       onUserChange({
         ...user,
@@ -86,6 +113,10 @@ export function Today({
         streak: { ...user.streak, current: snap.streakCurrent },
       });
       notify(task.doneAt ? 'success' : 'warning');
+      if (newAchievements && newAchievements.length > 0) {
+        const a = newAchievements[0];
+        showToast(`🏆 ${i.achievementUnlocked} ${a.icon} ${a.title}`);
+      }
     } catch {
       notify('error');
     } finally {
@@ -110,6 +141,29 @@ export function Today({
           )}
           <span className={regenGoalId ? 'text-text' : 'text-muted'}>{regenMsg}</span>
         </div>
+      )}
+
+      {bonus && (
+        <section className={`rounded-card p-4 border transition ${bonus.doneAt ? 'border-positive/30 bg-positive/5' : 'border-accent/40 bg-gradient-to-br from-accent/15 to-transparent'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✨</span>
+            <span className="font-semibold text-sm">{i.bonus.title}</span>
+            <span className="ml-auto text-[11px] text-accent font-medium">+{bonus.xp} XP</span>
+          </div>
+          <div className={`text-sm mt-2 ${bonus.doneAt ? 'line-through text-muted' : ''}`}>{bonus.title}</div>
+          {bonus.doneAt ? (
+            <div className="text-[11px] text-positive mt-2">✓ {i.bonus.done}</div>
+          ) : (
+            <button
+              onClick={completeBonus}
+              disabled={bonusBusy}
+              className="mt-3 w-full rounded-card bg-accent text-accentText font-medium py-2 text-sm transition active:opacity-80 disabled:opacity-50"
+            >
+              {bonusBusy ? '…' : i.bonus.claim}
+            </button>
+          )}
+          <div className="text-[10px] text-muted mt-2">{i.bonus.hint}</div>
+        </section>
       )}
 
       {isLoading && <SkeletonGoals />}
@@ -157,6 +211,14 @@ export function Today({
       </button>
 
       <ReferralCard lang={lang} user={user} />
+
+      {toast && (
+        <div className="fixed bottom-24 inset-x-0 z-[60] flex justify-center px-4 pointer-events-none">
+          <div className="bg-bg/95 border border-accent/30 rounded-card px-4 py-3 text-sm shadow-lg max-w-md w-full text-center animate-[fadeIn_240ms_ease-out]">
+            {toast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

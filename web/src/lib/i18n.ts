@@ -44,6 +44,13 @@ const dict = {
       copied: 'Скопировано ✓',
       shareText: 'Заходи в AI Habit Quest — собираем привычки с AI-планом 💪',
     },
+    bonus: {
+      title: 'Бонус от ИИ',
+      hint: 'Дополнительное задание на сегодня — сгорит к концу дня.',
+      done: 'Бонус выполнен',
+      claim: 'Выполнить',
+    },
+    achievementUnlocked: 'Новое достижение!',
     today: {
       title: 'Сегодня',
       empty: 'На сегодня заданий пока нет. Загляни попозже.',
@@ -148,6 +155,13 @@ const dict = {
       copied: 'Copied ✓',
       shareText: 'Join me on AI Habit Quest — build habits with an AI plan 💪',
     },
+    bonus: {
+      title: 'AI bonus',
+      hint: 'An extra task for today — expires by end of day.',
+      done: 'Bonus done',
+      claim: 'Complete',
+    },
+    achievementUnlocked: 'Achievement unlocked!',
     today: {
       title: 'Today',
       empty: 'No tasks for today yet. Check back later.',
