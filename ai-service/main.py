@@ -89,6 +89,19 @@ class PlanResponse(BaseModel):
     schedule: list[PlanDay]
 
 
+class BonusTaskRequest(BaseModel):
+    category: Category
+    goalTitle: str = Field(min_length=1, max_length=200)
+    language: Language | None = "ru"
+    recentTitles: list[str] = Field(default_factory=list)
+
+
+class BonusTaskResponse(BaseModel):
+    provider: Literal["stub", "openai", "ollama"]
+    title: str
+    xp: int
+
+
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {
@@ -121,6 +134,90 @@ async def generate_plan(req: PlanRequest) -> PlanResponse:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ollama provider failed, falling back to stub: %s", exc)
     return _generate_with_stub(req)
+
+
+# ----------------------------------------------------------------------------
+# Bonus micro-task (Premium daily stretch action)
+# ----------------------------------------------------------------------------
+
+BONUS_STUB = {
+    "ru": "Сделай один маленький шаг к цели сверх плана 💪",
+    "en": "Take one small extra step toward your goal 💪",
+}
+
+
+@app.post("/bonus-task", response_model=BonusTaskResponse)
+async def bonus_task(req: BonusTaskRequest) -> BonusTaskResponse:
+    logger.info("bonus-task: provider=%s category=%s title=%r", AI_PROVIDER, req.category, req.goalTitle)
+    if AI_PROVIDER == "openai":
+        try:
+            title = await _bonus_with_openai(req)
+            logger.info("bonus openai success for %r", req.goalTitle)
+            return BonusTaskResponse(provider="openai", title=title, xp=25)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("bonus OpenAI failed, using stub: %s", exc)
+    return BonusTaskResponse(provider="stub", title=BONUS_STUB[req.language or "ru"], xp=25)
+
+
+async def _bonus_with_openai(req: BonusTaskRequest) -> str:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    lang = "Russian" if req.language == "ru" else "English"
+    avoid = "; ".join(req.recentTitles[:8])
+    prompt = (
+        f"Goal category={req.category}, goal title={req.goalTitle!r}. "
+        f"Propose ONE optional bonus action the user can do TODAY beyond their plan — "
+        f"a small motivating stretch, concrete, doable in under 15 minutes, max 80 characters. "
+        f"Write it in {lang} as a single imperative sentence. "
+        f"Avoid repeating these: {avoid or '(none)'}. "
+        f'Respond as strict JSON: {{ "title": string }}. No markdown, JSON only.'
+    )
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": OPENAI_APP_URL,
+        "X-Title": OPENAI_APP_NAME,
+    }
+    payload = {
+        "model": OPENAI_MODEL,
+        "messages": [
+            {"role": "system", "content": "You output strict JSON only. No prose, no markdown fences."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.8,
+        "max_tokens": 200,
+        "response_format": {"type": "json_object"},
+    }
+    if "openrouter.ai" in OPENAI_BASE_URL and OPENROUTER_IGNORE_PROVIDERS:
+        payload["provider"] = {"ignore": OPENROUTER_IGNORE_PROVIDERS}
+
+    retryable_status = {403, 408, 409, 429, 500, 502, 503, 504}
+    body = None
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for attempt in range(1, OPENAI_MAX_ATTEMPTS + 1):
+            try:
+                resp = await client.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers)
+            except httpx.HTTPError as exc:
+                if attempt < OPENAI_MAX_ATTEMPTS:
+                    await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                    continue
+                raise HTTPException(status_code=502, detail=f"OpenAI request error: {exc}") from exc
+            if resp.status_code < 400:
+                body = resp.json()
+                break
+            if resp.status_code in retryable_status and attempt < OPENAI_MAX_ATTEMPTS:
+                await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                continue
+            raise HTTPException(status_code=502, detail=f"OpenAI API {resp.status_code}: {resp.text[:200]}")
+    if body is None:
+        raise HTTPException(status_code=502, detail="OpenAI API failed for bonus task")
+
+    content = body["choices"][0]["message"]["content"]
+    parsed = _parse_plan_json(content)
+    title = str(parsed.get("title", "")).strip()[:120]
+    if not title:
+        raise HTTPException(status_code=502, detail="Bonus task missing title")
+    return title
 
 
 # ----------------------------------------------------------------------------
