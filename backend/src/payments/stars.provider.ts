@@ -46,10 +46,15 @@ export class TelegramStarsProvider {
 
     let res;
     try {
+      // For Telegram Stars (currency=XTR) provider_token MUST be an empty
+      // string — otherwise the Bot API returns PROVIDER_ACCOUNT_INVALID when
+      // the invoice link is opened in the client.
+      // Ref: https://core.telegram.org/bots/payments-stars
       res = await axios.post(`${apiRoot}/bot${token}/createInvoiceLink`, {
         title: invoice.title,
         description: invoice.description,
         payload: invoice.payload,
+        provider_token: '',
         currency: 'XTR',
         prices: [{ label: invoice.title, amount: invoice.stars }],
       }, { timeout: 15_000 });
