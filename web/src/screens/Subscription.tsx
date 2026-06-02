@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Crown, Check, X, Sparkles, Infinity as InfinityIcon } from 'lucide-react';
+import { Crown, Check, X, Sparkles, Infinity as InfinityIcon, CreditCard } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { openInvoice } from '../lib/telegram';
@@ -139,15 +139,31 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
 
       <BenefitList i={i} />
 
-      <div className="space-y-2">
-        <button onClick={startTrial} disabled={busy !== null} className="btn-primary">
-          {busy === 'yk' ? '…' : i.subscription.trial}
+      <div className="space-y-2.5">
+        <div className="eyebrow px-1">{i.subscription.payMethodLabel}</div>
+
+        {/* Card (primary) — trial 1₽ → 299₽/мес */}
+        <button onClick={startTrial} disabled={busy !== null} className="btn-primary flex items-center justify-center gap-2">
+          <CreditCard size={16} />
+          {busy === 'yk' ? '…' : (
+            <span>
+              {i.subscription.payCard}
+              <span className="opacity-70 ml-1.5 text-xs font-normal">· {i.subscription.payCardTrial}</span>
+            </span>
+          )}
         </button>
-        <div className="text-xs text-muted text-center">{i.subscription.monthly}</div>
+        <div className="text-[11px] text-muted text-center -mt-1">{i.subscription.monthly}</div>
+
+        {/* Telegram Stars (secondary) */}
         {prices && (
           <button onClick={payStars} disabled={busy !== null} className="btn-ghost flex items-center justify-center gap-2">
             <Sparkles size={14} className="text-accent" />
-            {busy === 'stars' ? '…' : `${i.subscription.stars} (${prices.premiumStars} ⭐)`}
+            {busy === 'stars' ? '…' : (
+              <span>
+                {i.subscription.payStars}
+                <span className="opacity-70 ml-1.5 text-xs font-normal">· {prices.premiumStars} ⭐</span>
+              </span>
+            )}
           </button>
         )}
       </div>
