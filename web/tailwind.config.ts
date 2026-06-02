@@ -9,9 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Base layers — graded onyx (each step is a perceptual jump, not linear).
-        bg: 'var(--tg-theme-bg-color, #08090c)',          // deepest
-        surface: 'var(--tg-theme-secondary-bg-color, #11131a)',
+        // Onyx Sport Luxury is committed to a single dark direction — the
+        // Telegram theme variables are deliberately NOT consulted so the
+        // design renders identically on light / dark / custom TG themes.
+        bg: '#08090c',          // deepest
+        surface: '#11131a',
         // Elevated surfaces (cards, sheets) — slightly warmer.
         elevated: '#181b24',
         // Hairline borders (1px alpha).
@@ -19,15 +21,15 @@ const config: Config = {
         hairlineStrong: 'rgba(255,255,255,0.12)',
 
         // Text — high-contrast platinum + cool muted.
-        text: 'var(--tg-theme-text-color, #f5f7fb)',
-        muted: 'var(--tg-theme-hint-color, #7c8290)',
+        text: '#f5f7fb',
+        muted: '#7c8290',
         dim: '#4d5260',
 
-        // Accent — electric violet (kept Telegram-bridgeable).
-        accent: 'var(--tg-theme-button-color, #7c5cff)',
-        accentText: 'var(--tg-theme-button-text-color, #ffffff)',
+        // Accent — electric violet.
+        accent: '#7c5cff',
+        accentText: '#ffffff',
         accentGlow: '#9b7dff',
-        link: 'var(--tg-theme-link-color, #7c5cff)',
+        link: '#7c5cff',
 
         // Semantic.
         positive: '#19d57a',

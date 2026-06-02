@@ -4,14 +4,19 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
+/* Force a dark color-scheme app-wide so Telegram light-theme webviews don't
+ * paint default form chrome (selection highlight, scrollbar, autofill) on
+ * top of our Onyx palette. The body/html backgrounds are hardcoded too —
+ * neutralises --tg-theme-bg-color overrides from light TG themes. */
+html {
+  color-scheme: dark !important;
+  background: #08090c !important;
   height: 100%;
 }
 
-html {
-  background: theme('colors.bg');
+body,
+#root {
+  height: 100%;
 }
 
 body {
@@ -20,14 +25,17 @@ body {
   background:
     radial-gradient(60% 80% at 50% 0%, rgba(124, 92, 255, 0.18) 0%, rgba(124, 92, 255, 0) 60%),
     radial-gradient(80% 50% at 100% 100%, rgba(25, 213, 122, 0.07) 0%, rgba(25, 213, 122, 0) 50%),
-    theme('colors.bg');
+    #08090c !important;
   background-attachment: fixed;
-  color: theme('colors.text');
+  color: #f5f7fb !important;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-feature-settings: 'cv11', 'ss01';
   letter-spacing: -0.005em;
 }
+
+/* Telegram WebApp injects its own colour variables via inline style on
+ * <body>. The !important above ensures our palette wins on light theme too. */
 
 /* Subtle grain on the body so the dark surfaces feel atmospheric, not flat. */
 body::before {

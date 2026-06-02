@@ -19,6 +19,9 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
+  setBottomBarColor?: (color: string) => void;
   HapticFeedback?: {
     impactOccurred: (style: 'light' | 'medium' | 'heavy') => void;
     notificationOccurred: (type: 'success' | 'error' | 'warning') => void;
@@ -45,12 +48,21 @@ export function getWebApp(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
 
+// Match tailwind.config.ts `colors.bg` so Telegram's chrome (header strip,
+// home-indicator area) matches the app body — no light/dark split-bar.
+const ONYX_BG = '#08090c';
+
 export function ready(): void {
   const tg = getWebApp();
-  if (tg) {
-    tg.ready();
-    tg.expand();
-  }
+  if (!tg) return;
+  tg.ready();
+  tg.expand();
+  // Force Telegram's surrounding chrome to our dark palette regardless of
+  // the user's TG theme. Older clients may not have these methods — fail
+  // soft.
+  try { tg.setHeaderColor?.(ONYX_BG); } catch { /* ignore */ }
+  try { tg.setBackgroundColor?.(ONYX_BG); } catch { /* ignore */ }
+  try { tg.setBottomBarColor?.(ONYX_BG); } catch { /* ignore */ }
 }
 
 export function getInitData(): string {
