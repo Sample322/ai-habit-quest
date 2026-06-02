@@ -25,6 +25,7 @@ export interface User {
   isPremium: boolean;
   isAdmin: boolean;
   premiumUntil: string | null;
+  hasUsedTrial: boolean;
   streak: { current: number; best: number; freezesLeft: number };
   xpTotal: number;
   level: number;

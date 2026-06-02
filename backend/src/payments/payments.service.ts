@@ -65,6 +65,54 @@ export class PaymentsService {
   }
 
   /**
+   * Free 3-day trial — claimable exactly once per account, no payment needed.
+   * Grants Premium immediately and timestamps the claim so the user can never
+   * use it again. The notifications scheduler picks up the expiry to send a
+   * one-off "subscribe now" DM.
+   */
+  async claimFreeTrial(userId: string): Promise<{
+    isPremium: boolean;
+    premiumUntil: string;
+    trialClaimedAt: string;
+  }> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.trialClaimedAt) {
+      throw new BadRequestException({
+        code: 'trial_already_used',
+        message: 'Free trial already used on this account.',
+      });
+    }
+    const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z').getTime();
+    if (user.premiumUntil && user.premiumUntil.getTime() === ADMIN_SENTINEL) {
+      throw new BadRequestException({
+        code: 'already_premium',
+        message: 'You already have Premium.',
+      });
+    }
+    const now = new Date();
+    const TRIAL_MS = 3 * 24 * 60 * 60 * 1000;
+    const base = user.premiumUntil && user.premiumUntil > now ? user.premiumUntil : now;
+    const newUntil = new Date(base.getTime() + TRIAL_MS);
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isPremium: true,
+        premiumUntil: newUntil,
+        trialClaimedAt: now,
+        trialReminderSent: false,
+      },
+    });
+
+    this.logger.log(`Free trial claimed user=${userId} until=${newUntil.toISOString()}`);
+    return {
+      isPremium: updated.isPremium,
+      premiumUntil: updated.premiumUntil!.toISOString(),
+      trialClaimedAt: now.toISOString(),
+    };
+  }
+
+  /**
    * Webhook entry for YooKassa "payment.succeeded" notifications.
    * Skeleton — real signature verification belongs to Phase 3 with test credentials.
    */

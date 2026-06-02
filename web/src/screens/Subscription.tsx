@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Crown, Check, X, Sparkles, Infinity as InfinityIcon, CreditCard } from 'lucide-react';
+import { Crown, Check, X, Sparkles, Infinity as InfinityIcon, CreditCard, Gift } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { openInvoice } from '../lib/telegram';
@@ -22,7 +22,7 @@ export function Subscription({ lang, user, onClose, onActivated }: SubscriptionP
     return <ActiveSubscription lang={lang} user={user} onClose={onClose} />;
   }
 
-  return <UpgradeSubscription lang={lang} i={i} onClose={onClose} onActivated={onActivated} />;
+  return <UpgradeSubscription lang={lang} i={i} user={user} onClose={onClose} onActivated={onActivated} />;
 }
 
 function ActiveSubscription({ lang, user, onClose }: { lang: Lang; user: User; onClose: () => void }): JSX.Element {
@@ -74,27 +74,34 @@ function ActiveSubscription({ lang, user, onClose }: { lang: Lang; user: User; o
 interface UpgradeSubscriptionProps {
   lang: Lang;
   i: ReturnType<typeof t>;
+  user: User;
   onClose: () => void;
   onActivated: () => void | Promise<void>;
 }
 
-function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscriptionProps): JSX.Element {
+function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSubscriptionProps): JSX.Element {
   const [prices, setPrices] = useState<{ trialPriceRub: number; monthlyPriceRub: number; premiumStars: number } | null>(null);
-  const [busy, setBusy] = useState<'yk' | 'stars' | null>(null);
+  const [busy, setBusy] = useState<'trial' | 'stars' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [methodOpen, setMethodOpen] = useState(false);
 
   useEffect(() => {
     void (async () => setPrices(await api.prices()))();
   }, []);
 
-  async function startTrial(): Promise<void> {
-    setBusy('yk');
+  async function claimTrial(): Promise<void> {
+    if (user.hasUsedTrial) return;
+    setBusy('trial');
     setError(null);
     try {
-      const { confirmationUrl } = await api.startYooKassaTrial();
-      window.open(confirmationUrl, '_blank', 'noopener');
+      await api.claimTrial();
+      setInfo(i.subscription.freeTrialClaimed);
+      await onActivated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : i.errors.generic);
+      const code = ((err as { body?: { code?: string } }).body)?.code;
+      if (code === 'trial_already_used') setError(i.subscription.freeTrialUsed);
+      else setError(err instanceof Error ? err.message : i.errors.generic);
     } finally {
       setBusy(null);
     }
@@ -103,8 +110,6 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
   async function payStars(): Promise<void> {
     setBusy('stars');
     setError(null);
-    // Hard 20s timeout — backend can stall if Telegram createInvoiceLink hangs,
-    // and we don't want the button frozen at "…" forever.
     const timer = setTimeout(() => {
       setBusy((b) => (b === 'stars' ? null : b));
       setError(i.errors.generic);
@@ -114,6 +119,7 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
       openInvoice(invoiceLink, async (status) => {
         if (status === 'paid') await onActivated();
       });
+      setMethodOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : i.errors.generic);
     } finally {
@@ -142,31 +148,42 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
       <div className="space-y-2.5">
         <div className="eyebrow px-1">{i.subscription.payMethodLabel}</div>
 
-        {/* Card (primary) — trial 1₽ → 299₽/мес */}
-        <button onClick={startTrial} disabled={busy !== null} className="btn-primary flex items-center justify-center gap-2">
-          <CreditCard size={16} />
-          {busy === 'yk' ? '…' : (
-            <span>
-              {i.subscription.payCard}
-              <span className="opacity-70 ml-1.5 text-xs font-normal">· {i.subscription.payCardTrial}</span>
+        {/* Free trial — primary, one-time per account */}
+        {!user.hasUsedTrial ? (
+          <button
+            onClick={claimTrial}
+            disabled={busy !== null}
+            className="btn-primary flex flex-col items-center gap-0.5"
+          >
+            <span className="flex items-center gap-2">
+              <Gift size={16} />
+              {busy === 'trial' ? '…' : i.subscription.freeTrialAction}
             </span>
-          )}
-        </button>
-        <div className="text-[11px] text-muted text-center -mt-1">{i.subscription.monthly}</div>
-
-        {/* Telegram Stars (secondary) */}
-        {prices && (
-          <button onClick={payStars} disabled={busy !== null} className="btn-ghost flex items-center justify-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            {busy === 'stars' ? '…' : (
-              <span>
-                {i.subscription.payStars}
-                <span className="opacity-70 ml-1.5 text-xs font-normal">· {prices.premiumStars} ⭐</span>
-              </span>
-            )}
+            <span className="text-[11px] font-normal opacity-80">{i.subscription.freeTrialSub}</span>
           </button>
+        ) : (
+          <div className="rounded-pill border border-hairline bg-white/[0.02] py-3 px-5 text-center text-sm text-muted">
+            <Gift size={14} className="inline mr-1.5 -mt-0.5 opacity-60" />
+            {i.subscription.freeTrialUsed}
+          </div>
         )}
+
+        {/* Subscribe — opens method-picker modal */}
+        <button
+          onClick={() => setMethodOpen(true)}
+          disabled={busy !== null}
+          className="btn-ghost flex items-center justify-center gap-2"
+        >
+          <CreditCard size={14} className="text-accent" />
+          {i.subscription.payAction}
+        </button>
       </div>
+
+      {info && (
+        <div className="card border-positive/40 bg-positive/10 p-3 text-center text-sm text-text">
+          {info}
+        </div>
+      )}
 
       <div className="text-[11px] text-muted/80 leading-relaxed">{i.subscription.offer}</div>
       <div className="text-[11px] text-center text-muted/70 flex justify-center gap-3">
@@ -179,7 +196,86 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
         </a>
       </div>
       {error && <div className="text-xs text-danger break-words">{error}</div>}
+
+      {methodOpen && prices && (
+        <PaymentMethodModal
+          i={i}
+          prices={prices}
+          busy={busy === 'stars'}
+          onStars={payStars}
+          onClose={() => setMethodOpen(false)}
+        />
+      )}
     </Backdrop>
+  );
+}
+
+function PaymentMethodModal({
+  i, prices, busy, onStars, onClose,
+}: {
+  i: ReturnType<typeof t>;
+  prices: { premiumStars: number };
+  busy: boolean;
+  onStars: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-3 animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg rounded-card border border-hairline shadow-card w-full max-w-md p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold tracking-tight">{i.subscription.payMethodPick}</h3>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="w-9 h-9 -mr-2 grid place-items-center rounded-pill text-muted hover:text-text hover:bg-white/5 transition"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-2.5">
+          {/* Stars */}
+          <button
+            onClick={onStars}
+            disabled={busy}
+            className="w-full card p-4 flex items-center gap-3 transition active:scale-[0.99] hover:border-hairlineStrong text-left disabled:opacity-50"
+          >
+            <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+              <Sparkles size={18} className="text-white" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold">{i.subscription.payMethodStars}</div>
+              <div className="text-[11px] text-muted mt-0.5">
+                {i.subscription.payMethodStarsHint.replace('{n}', String(prices.premiumStars))}
+              </div>
+            </div>
+            {busy ? <span className="text-muted text-sm">…</span> : <span className="text-muted text-lg">›</span>}
+          </button>
+
+          {/* Card — coming soon (YK pending approval) */}
+          <div className="w-full card p-4 flex items-center gap-3 opacity-60 cursor-not-allowed">
+            <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center border border-hairlineStrong bg-bg/40">
+              <CreditCard size={18} className="text-muted" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                {i.subscription.payMethodCard}
+                <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-pill bg-white/10 text-muted">
+                  {i.subscription.payMethodCardSoon}
+                </span>
+              </div>
+              <div className="text-[11px] text-muted mt-0.5">{i.subscription.payMethodCardHint}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -225,6 +225,50 @@ export class NotificationsScheduler {
     }
     if (sent > 0) this.logger.log(`Sent ${sent} weekly recaps`);
   }
+
+  /**
+   * Free-trial expiry nudge. Users whose 3-day free trial just ran out and
+   * who aren't currently paying receive one DM offering the paid subscription.
+   * Idempotent via trialReminderSent.
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async trialExpiryNudge(): Promise<void> {
+    const TRIAL_MS = 3 * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - TRIAL_MS);
+
+    const expired = await this.prisma.user.findMany({
+      where: {
+        trialClaimedAt: { not: null, lte: cutoff },
+        trialReminderSent: false,
+      },
+      select: { id: true, telegramId: true, languageCode: true, premiumUntil: true },
+    });
+
+    let sent = 0;
+    for (const u of expired) {
+      // Skip if user extended Premium through a payment in the meantime.
+      if (u.premiumUntil && u.premiumUntil > now) {
+        await this.prisma.user.update({ where: { id: u.id }, data: { trialReminderSent: true } });
+        continue;
+      }
+      const isRu = u.languageCode !== 'en';
+      const msg = isRu
+        ? '⏳ Твой бесплатный пробный период Premium закончился. Если зашло — оформи подписку прямо в приложении, продолжай с того же уровня.'
+        : '⏳ Your free Premium trial just ran out. If you liked it, grab the subscription right inside the app — pick up where you left off.';
+      try {
+        await this.bot.sendReminder(u.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`trial nudge failed for ${u.id}: ${(err as Error).message}`);
+      }
+      await this.prisma.user.update({
+        where: { id: u.id },
+        data: { trialReminderSent: true },
+      });
+    }
+    if (sent > 0) this.logger.log(`Sent ${sent} trial-expiry nudges`);
+  }
 }
 
 function matchesLocalTime(now: Date, timezone: string, hour: number, minute: number): boolean {

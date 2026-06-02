@@ -25,6 +25,12 @@ export class PaymentsController {
     return this.payments.createStarsInvoice(me.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('trial/claim')
+  async trialClaim(@CurrentUser() me: AuthenticatedUser) {
+    return this.payments.claimFreeTrial(me.id);
+  }
+
   @Post('yookassa/webhook')
   async yooKassaWebhook(@Body() body: Record<string, unknown>) {
     return this.payments.handleYooKassaWebhook(body);

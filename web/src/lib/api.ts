@@ -138,6 +138,12 @@ export const api = {
 
   starsInvoice: () => request<{ invoiceLink: string; payload: string }>('/payments/stars/invoice', { method: 'POST' }),
 
+  claimTrial: () =>
+    request<{ isPremium: boolean; premiumUntil: string; trialClaimedAt: string }>(
+      '/payments/trial/claim',
+      { method: 'POST' },
+    ),
+
   // --- In-app admin (only works for admin Telegram IDs) ---
   adminStats: () => request<AdminStats>('/app-admin/stats'),
   adminUsers: (q?: string) =>

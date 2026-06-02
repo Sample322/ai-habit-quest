@@ -87,6 +87,10 @@ model User {
   referralRewarded         Boolean   @default(false)
   referralGiftClaimedAt    DateTime?
   referralGiftReminderSent Boolean   @default(false)
+  // Free 3-day trial — claimable once per account, no card required.
+  // After expiry, scheduler DMs user once with upsell.
+  trialClaimedAt           DateTime?
+  trialReminderSent        Boolean   @default(false)
   referralCode  String   @unique
   referredById  String?
   referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
