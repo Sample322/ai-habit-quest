@@ -57,7 +57,13 @@ export const api = {
 
   me: () => request<User>('/me'),
 
-  updatePrefs: (prefs: Partial<{ languageCode: string; timezone: string; reminderHour: number; reminderMinute: number }>) =>
+  updatePrefs: (prefs: Partial<{
+    languageCode: string;
+    timezone: string;
+    firstName: string;
+    reminderHour: number;
+    reminderMinute: number;
+  }>) =>
     request<User>('/me/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
 
   goals: () => request<Goal[]>('/goals'),

@@ -78,15 +78,34 @@ export class UsersService {
 
   async updatePreferences(
     id: string,
-    prefs: { languageCode?: string; timezone?: string; reminderHour?: number; reminderMinute?: number },
+    prefs: {
+      languageCode?: string;
+      timezone?: string;
+      firstName?: string;
+      reminderHour?: number;
+      reminderMinute?: number;
+    },
   ) {
     const data: Record<string, unknown> = {};
     if (prefs.languageCode) data['languageCode'] = prefs.languageCode === 'en' ? 'en' : 'ru';
-    if (prefs.timezone) data['timezone'] = prefs.timezone;
+    if (prefs.timezone && isValidTimeZone(prefs.timezone)) data['timezone'] = prefs.timezone;
+    if (prefs.firstName !== undefined) {
+      const trimmed = prefs.firstName.trim().slice(0, 40);
+      data['firstName'] = trimmed || null;
+    }
     if (prefs.reminderHour !== undefined) data['reminderHour'] = clamp(prefs.reminderHour, 0, 23);
     if (prefs.reminderMinute !== undefined) data['reminderMinute'] = clamp(prefs.reminderMinute, 0, 59);
     await this.prisma.user.update({ where: { id }, data });
     return this.getProfile(id);
+  }
+}
+
+function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
   }
 }
 

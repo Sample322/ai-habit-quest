@@ -60,6 +60,10 @@ model User {
   premiumUntil  DateTime?
   streakCurrent Int      @default(0)
   streakBest    Int      @default(0)
+  // L: streak-break DM. Set when streak transitions positive → 0 in recompute.
+  // Cleared when recompute sees current > 0 again.
+  streakBrokenAt       DateTime?
+  streakBrokenNotified Boolean   @default(false)
   xpTotal       Int      @default(0)
   level         Int      @default(0)
   // D1: streak freeze — Premium-only restore. Counter resets when month changes.

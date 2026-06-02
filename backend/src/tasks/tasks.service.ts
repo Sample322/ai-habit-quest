@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { DailyTask, Goal, GoalStatus, Habit, Plan } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { BotService } from '../bot/bot.service';
 import { AiPlanResponse } from '../ai/ai.types';
 import { computeAchievements, type AchievementView } from '../gamification/progress-extras';
 
@@ -35,6 +36,8 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
+    @Inject(forwardRef(() => BotService))
+    private readonly bot: BotService,
   ) {}
 
   async listToday(userId: string): Promise<DailyTaskView[]> {
@@ -94,6 +97,9 @@ export class TasksService {
       newAchievements = after.filter((a) => a.earned && !earnedBefore.has(a.code));
       if (newAchievements.length > 0) {
         await this.persistEarnedBadges(userId, newAchievements);
+        // M: DM the user about each newly-earned achievement. Fire-and-forget
+        // so a bot hiccup doesn't break the toggle response.
+        void this.sendAchievementDM(user.telegramId, lang, newAchievements);
       }
     }
 
@@ -137,6 +143,34 @@ export class TasksService {
         update: {},
         create: { userId, badgeId: badge.id },
       });
+    }
+  }
+
+  /**
+   * M: send a quick "🏆 ачивка разблокирована" DM via the bot. Combined into
+   * a single message when more than one fires at once. Never throws — best-
+   * effort, safe in a fire-and-forget context.
+   */
+  private async sendAchievementDM(
+    telegramId: bigint,
+    lang: 'ru' | 'en',
+    achievements: AchievementView[],
+  ): Promise<void> {
+    try {
+      const head = lang === 'en' ? '🏆 Achievement unlocked!' : '🏆 Новое достижение!';
+      const lines = achievements.map((a) => {
+        const xp = a.bonusXp > 0 ? ` · +${a.bonusXp} XP` : '';
+        return `${a.icon} ${a.title}${xp}`;
+      });
+      const tail = achievements.length > 1
+        ? (lang === 'en'
+            ? `+${achievements.length - 1} more — keep going.`
+            : `+${achievements.length - 1} ещё — так держать.`)
+        : '';
+      const msg = [head, '', ...lines, '', tail].filter(Boolean).join('\n');
+      await this.bot.sendReminder(telegramId, msg);
+    } catch {
+      // bot DM is non-critical — swallow.
     }
   }
 

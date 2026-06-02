@@ -90,6 +90,17 @@ export class GamificationService {
     const before = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const streakBest = Math.max(before.streakBest, best);
 
+    // L: streak-break detection. Mark transition positive→0 so the scheduler
+    // can DM the user once with a freeze CTA. Clear when streak returns.
+    const breakUpdate: { streakBrokenAt?: Date | null; streakBrokenNotified?: boolean } = {};
+    if (before.streakCurrent > 0 && streak === 0) {
+      breakUpdate.streakBrokenAt = new Date();
+      breakUpdate.streakBrokenNotified = false;
+    } else if (streak > 0 && before.streakBrokenAt) {
+      breakUpdate.streakBrokenAt = null;
+      breakUpdate.streakBrokenNotified = false;
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -97,6 +108,7 @@ export class GamificationService {
         streakBest,
         xpTotal,
         level,
+        ...breakUpdate,
       },
     });
 

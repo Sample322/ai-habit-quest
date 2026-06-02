@@ -8,6 +8,7 @@ import { UsersService } from './users.service';
 class UpdatePreferencesDto {
   @IsOptional() @IsString() languageCode?: string;
   @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsString() firstName?: string;
   @IsOptional() @IsInt() @Min(0) @Max(23) reminderHour?: number;
   @IsOptional() @IsInt() @Min(0) @Max(59) reminderMinute?: number;
 }

@@ -6,6 +6,7 @@ import type { GoalCategory } from '../lib/types';
 import { haptic, notify } from '../lib/telegram';
 import { GoalCreating } from '../components/GoalCreating';
 import { Icon } from '../components/ui/Icons';
+import { templatesFor } from '../lib/templates';
 
 const STAGE_INTERVAL_MS = 2200;
 const CREATE_TIMEOUT_MS = 100_000;
@@ -145,8 +146,37 @@ export function Onboarding({
 
           {picked && (
             <div className="card p-5 space-y-4 animate-rise">
+              {/* Goal templates — tap to autofill the title input */}
               <div>
-                <div className="eyebrow">{i.onboarding.titleLabel}</div>
+                <div className="eyebrow flex items-center justify-between">
+                  <span>{i.templates.title}</span>
+                  <span className="text-muted normal-case tracking-normal font-normal">{i.templates.hint}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {templatesFor(picked).map((t) => {
+                    const text = lang === 'en' ? t.en : t.ru;
+                    const active = title === text;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { haptic('light'); setTitle(text); }}
+                        className={`px-3 py-1.5 rounded-pill text-xs transition border flex items-center gap-1.5 ${
+                          active
+                            ? 'border-accent bg-accent/10 text-text shadow-glow'
+                            : 'border-hairlineStrong text-muted bg-white/[0.02] hover:text-text hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <span>{t.emoji}</span>
+                        <span className="truncate max-w-[200px]">{text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="eyebrow">{i.onboarding.titleLabel} <span className="normal-case tracking-normal font-normal text-muted">· {i.templates.orCustom}</span></div>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}

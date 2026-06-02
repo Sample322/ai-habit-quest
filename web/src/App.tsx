@@ -15,6 +15,7 @@ import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
 import { NumberTicker } from './components/ui/NumberTicker';
 import { AvatarFrame } from './components/ui/AvatarFrame';
 import { SettingsSheet } from './components/SettingsSheet';
+import { TutorialOverlay, shouldShowTutorial } from './components/TutorialOverlay';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -30,6 +31,7 @@ export function App() {
   const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -75,6 +77,14 @@ export function App() {
   }, [refreshUser, refreshGoals]);
 
   const activeGoal = goals?.find((g) => g.status === 'active') ?? null;
+
+  // Trigger the first-run tutorial as soon as the Today screen would render
+  // (i.e. user has an active goal and we're past the auth+goal-create stage).
+  useEffect(() => {
+    if (status === 'ready' && activeGoal && shouldShowTutorial()) {
+      setTutorialOpen(true);
+    }
+  }, [status, activeGoal]);
 
   if (status === 'authenticating' || status === 'idle') {
     return (
@@ -219,6 +229,10 @@ export function App() {
           onUserChange={(u) => setUser(u)}
           onClose={() => setSettingsOpen(false)}
         />
+      )}
+
+      {tutorialOpen && (
+        <TutorialOverlay lang={lang} onClose={() => setTutorialOpen(false)} />
       )}
 
       {deletingGoal && (

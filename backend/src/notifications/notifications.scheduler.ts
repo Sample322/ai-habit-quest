@@ -91,6 +91,64 @@ export class NotificationsScheduler {
     }
     if (sent > 0) this.logger.log(`Sent ${sent} gift-expiry nudges`);
   }
+
+  /**
+   * L: streak-break nudge. Users whose streak just transitioned to 0 get one
+   * DM offering the streak-freeze. Premium users get a direct CTA; free users
+   * get a Premium upsell. Fires once per break via streakBrokenNotified.
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async streakBreakNudge(): Promise<void> {
+    const broken = await this.prisma.user.findMany({
+      where: {
+        streakBrokenAt: { not: null },
+        streakBrokenNotified: false,
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        languageCode: true,
+        isPremium: true,
+        streakFreezesLeft: true,
+        streakFreezesMonth: true,
+      },
+    });
+
+    const month = new Date().toISOString().slice(0, 7);
+    let sent = 0;
+    for (const u of broken) {
+      const isRu = u.languageCode !== 'en';
+      const freshMonth = u.streakFreezesMonth !== month;
+      const left = freshMonth ? 2 : u.streakFreezesLeft;
+
+      let msg: string;
+      if (u.isPremium && left > 0) {
+        msg = isRu
+          ? `🔥 Серия прервалась. У тебя ${left} заморозок этого месяца — нажми «Восстановить серию» на вкладке «Прогресс».`
+          : `🔥 Streak broken. You have ${left} freeze${left === 1 ? '' : 's'} this month — tap "Restore streak" on the Progress tab.`;
+      } else if (u.isPremium) {
+        msg = isRu
+          ? '🔥 Серия прервалась. Заморозки этого месяца уже использованы — начни новую серию завтра.'
+          : '🔥 Streak broken. You\'ve used this month\'s freezes — start a new streak tomorrow.';
+      } else {
+        msg = isRu
+          ? '🔥 Серия прервалась 😔 С Premium ты бы мог восстановить её одним нажатием. Загляни на вкладку Premium.'
+          : '🔥 Streak broken 😔 With Premium you could restore it in one tap. Check the Premium tab.';
+      }
+
+      try {
+        await this.bot.sendReminder(u.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`streak nudge failed for ${u.id}: ${(err as Error).message}`);
+      }
+      await this.prisma.user.update({
+        where: { id: u.id },
+        data: { streakBrokenNotified: true },
+      });
+    }
+    if (sent > 0) this.logger.log(`Sent ${sent} streak-break nudges`);
+  }
 }
 
 function matchesLocalTime(now: Date, timezone: string, hour: number, minute: number): boolean {
