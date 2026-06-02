@@ -27,7 +27,10 @@ export function BottomNav({
     { id: 'premium', label: i.nav.premium, Icon: Crown },
   ];
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 px-3 pb-3 pt-2 pointer-events-none">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-40 px-3 pt-2 pointer-events-none"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+    >
       <div className="max-w-xl mx-auto pointer-events-auto">
         <div className="relative grid grid-cols-3 gap-1 rounded-pill border border-hairlineStrong bg-elevated/80 backdrop-blur-xl p-1.5 shadow-card">
           {items.map((it) => {

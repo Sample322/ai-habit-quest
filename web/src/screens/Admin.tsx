@@ -50,7 +50,7 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
 
   return (
     <div className="fixed inset-0 z-50 bg-bg overflow-y-auto animate-fade-in">
-      <div className="max-w-xl mx-auto px-4 pt-6 pb-24">
+      <div className="max-w-xl mx-auto px-4 app-safe-top app-safe-bottom">
         <header className="flex items-center justify-between mb-5 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center bg-accent/15 border border-accent/30">

@@ -88,6 +88,26 @@ textarea:-webkit-autofill {
   font-feature-settings: 'tnum';
 }
 
+/* Telegram WebApp on mobile renders its own header strip (×Закрыть, ⋮, …)
+ * ABOVE the app content when viewport-fit=cover is set. iOS also reserves
+ * the notch via env(safe-area-inset-top). Add both so app content always
+ * clears the TG chrome — 56px baseline + the iOS safe-area on notched
+ * phones. Apply to every top-level container (main app, admin overlay, full
+ * modals).  Without this the header (avatar + name + chips) sits underneath
+ * the Telegram close button. */
+.app-safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+}
+.app-safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6rem);
+}
+/* Modal bottom-sheet variant — sheets already get their own safe-area on
+ * iOS; keep it explicit so the close button doesn't sit under the home
+ * indicator. */
+.sheet-safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+}
+
 @layer components {
   /* Glass-onyx surface. Layered: subtle gradient + 1px hairline + soft shadow. */
   .surface {

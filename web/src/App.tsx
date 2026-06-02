@@ -127,7 +127,7 @@ export function App() {
 
   if (!activeGoal) {
     return (
-      <div className="min-h-screen px-4 pt-6 pb-24 max-w-xl mx-auto">
+      <div className="min-h-screen px-4 app-safe-top app-safe-bottom max-w-xl mx-auto">
         <Header
           user={user}
           lang={lang}
