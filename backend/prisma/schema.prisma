@@ -85,6 +85,7 @@ model User {
   payments      PaymentEvent[]
   feedback      Feedback[]
   leagueMembers LeagueMember[]
+  seasonResults SeasonResult[]
 
   @@index([referredById])
 }
@@ -258,6 +259,42 @@ model LeagueMember {
   @@unique([leagueId, userId])
   @@index([userId])
   @@index([leagueId, weeklyXp])
+}
+
+// D: seasons. 4-week XP races. Snapshot top-N at close, reward, start new.
+enum SeasonStatus {
+  active
+  closed
+}
+
+model Season {
+  id        String        @id @default(cuid())
+  number    Int           @unique          // 1, 2, 3 …
+  startDate DateTime      @db.Date
+  endDate   DateTime      @db.Date
+  status    SeasonStatus  @default(active)
+  createdAt DateTime      @default(now())
+
+  results   SeasonResult[]
+
+  @@index([status])
+}
+
+model SeasonResult {
+  id            String   @id @default(cuid())
+  seasonId      String
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seasonalXp    Int      @default(0)
+  finalRank     Int                // 1-based; assigned at close
+  rewardClaimed Boolean  @default(false)
+  rewardKind    String?            // "premium_7d" | "premium_3d" | "badge"
+  createdAt     DateTime @default(now())
+
+  @@unique([seasonId, userId])
+  @@index([userId])
+  @@index([seasonId, finalRank])
 }
 
 model PlanCache {

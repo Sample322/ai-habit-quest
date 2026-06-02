@@ -1,7 +1,7 @@
 import type {
   DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory,
-  AdminStats, AdminUser, AdminFeedback, Leaderboard, Achievement, BonusTask,
-  GoalInsights, LeaguesMe,
+  AdminStats, AdminUser, AdminFeedback, Leaderboard, LeaderboardScope, Achievement, BonusTask,
+  GoalInsights, LeaguesMe, SeasonView,
 } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
@@ -100,7 +100,10 @@ export const api = {
 
   progress: () => request<ProgressOverview>('/progress'),
 
-  leaderboard: () => request<Leaderboard>('/leaderboard'),
+  leaderboard: (scope?: LeaderboardScope) =>
+    request<Leaderboard>(`/leaderboard${scope ? `?scope=${scope}` : ''}`),
+
+  season: () => request<SeasonView>('/seasons/current'),
 
   goalInsights: (id: string) => request<GoalInsights>(`/goals/${id}/insights`),
 

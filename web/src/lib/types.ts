@@ -1,5 +1,12 @@
 export type GoalCategory = 'sport' | 'study' | 'discipline' | 'custom';
 
+export type FrameTier = 'none' | 'bronze' | 'silver' | 'gold' | 'aurora';
+
+export interface Cosmetics {
+  frame: FrameTier;
+  title: string | null;
+}
+
 export interface User {
   id: string;
   telegramId: string;
@@ -16,11 +23,24 @@ export interface User {
   level: number;
   referralCode: string;
   referralCount: number;
+  cosmetics: Cosmetics;
   limits: {
     maxGoals: number | null;
     maxHabits: number | null;
     planHorizonDays: number;
   };
+}
+
+export interface SeasonView {
+  number: number;
+  startDate: string;
+  endDate: string;
+  daysLeft: number;
+  myXp: number;
+  myRank: number;
+  totalPlayers: number;
+  top: { position: number; id: string; name: string; xp: number; isMe: boolean }[];
+  rewardTiers: { maxRank: number; days: number }[];
 }
 
 export interface Habit {
@@ -96,7 +116,10 @@ export interface LeaderboardEntry {
   isMe: boolean;
 }
 
+export type LeaderboardScope = 'global' | 'friends';
+
 export interface Leaderboard {
+  scope: LeaderboardScope;
   myRank: number;
   totalPlayers: number;
   top: LeaderboardEntry[];

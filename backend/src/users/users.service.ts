@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { envNumber } from '../config/env';
 import { isAdminTelegramId } from '../admin/is-admin';
+import { computeAchievements } from '../gamification/progress-extras';
+import { computeCosmetics } from '../gamification/cosmetics';
 
 @Injectable()
 export class UsersService {
@@ -27,7 +29,28 @@ export class UsersService {
 
   async getProfile(id: string) {
     const u = await this.findById(id);
-    const referralCount = await this.prisma.user.count({ where: { referredById: id } });
+    const [referralCount, completedTasks, goalsCount] = await Promise.all([
+      this.prisma.user.count({ where: { referredById: id } }),
+      this.prisma.dailyTask.count({ where: { userId: id, doneAt: { not: null } } }),
+      this.prisma.goal.count({ where: { userId: id } }),
+    ]);
+    const lang = u.languageCode === 'en' ? 'en' : 'ru';
+    const achievements = computeAchievements(
+      {
+        xpTotal: u.xpTotal,
+        streakBest: u.streakBest,
+        completedTasks,
+        goals: goalsCount,
+        referrals: referralCount,
+      },
+      lang,
+    );
+    const earnedCodes = new Set(achievements.filter((a) => a.earned).map((a) => a.code));
+    const cosmetics = computeCosmetics(
+      { level: u.level, isPremium: u.isPremium, earnedAchievementCodes: earnedCodes },
+      lang,
+    );
+
     return {
       id: u.id,
       telegramId: u.telegramId.toString(),
@@ -44,6 +67,7 @@ export class UsersService {
       level: u.level,
       referralCode: u.referralCode,
       referralCount,
+      cosmetics,
       limits: {
         maxGoals: u.isPremium ? null : this.freeMaxGoals(),
         maxHabits: u.isPremium ? null : this.freeMaxHabits(),

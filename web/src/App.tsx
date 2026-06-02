@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Flame, Zap, Settings, X } from 'lucide-react';
+import { Flame, Zap, Settings, X, Wrench } from 'lucide-react';
 
 import { api, setToken } from './lib/api';
 import { detectLanguage, getInitData, ready } from './lib/telegram';
@@ -13,6 +13,8 @@ import { Admin } from './screens/Admin';
 import { BottomNav, type Tab } from './components/BottomNav';
 import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
 import { NumberTicker } from './components/ui/NumberTicker';
+import { AvatarFrame } from './components/ui/AvatarFrame';
+import { SettingsSheet } from './components/SettingsSheet';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -27,6 +29,7 @@ export function App() {
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -98,11 +101,20 @@ export function App() {
     };
     return (
       <Center>
-        <div className="surface max-w-sm text-center space-y-3">
-          <div className="text-2xl">🔒</div>
-          <div className="text-muted">{i.errors.auth}</div>
-          {error && <div className="text-xs text-muted/70 break-words">{error}</div>}
-          <pre className="text-[10px] text-left bg-black/20 rounded p-2 overflow-auto">{JSON.stringify(diag, null, 2)}</pre>
+        <div className="card aurora max-w-sm w-full text-center space-y-4 p-6 animate-rise">
+          <div className="mx-auto w-12 h-12 rounded-pill grid place-items-center bg-danger/15 border border-danger/30">
+            <X size={20} className="text-danger" />
+          </div>
+          <div className="space-y-1">
+            <div className="text-lg font-bold tracking-tight">{i.errors.auth}</div>
+            {error && <div className="text-xs text-muted break-words">{error}</div>}
+          </div>
+          <details className="text-left">
+            <summary className="text-[11px] text-muted cursor-pointer hover:text-text transition">diagnostics</summary>
+            <pre className="text-[10px] text-left bg-bg/60 border border-hairline rounded-card p-3 mt-2 overflow-auto">
+{JSON.stringify(diag, null, 2)}
+            </pre>
+          </details>
         </div>
       </Center>
     );
@@ -113,7 +125,12 @@ export function App() {
   if (!activeGoal) {
     return (
       <div className="min-h-screen px-4 pt-6 pb-24 max-w-xl mx-auto">
-        <Header user={user} lang={lang} onAdminClick={() => setAdminOpen(true)} />
+        <Header
+          user={user}
+          lang={lang}
+          onAdminClick={() => setAdminOpen(true)}
+          onSettingsClick={() => setSettingsOpen(true)}
+        />
         <Onboarding
           lang={lang}
           onCreated={async () => {
@@ -128,7 +145,12 @@ export function App() {
 
   return (
     <div className="min-h-screen px-4 pt-6 pb-24 max-w-xl mx-auto">
-      <Header user={user} lang={lang} onAdminClick={() => setAdminOpen(true)} />
+      <Header
+        user={user}
+        lang={lang}
+        onAdminClick={() => setAdminOpen(true)}
+        onSettingsClick={() => setSettingsOpen(true)}
+      />
 
       {tab === 'today' && (
         <Today
@@ -186,6 +208,15 @@ export function App() {
       )}
 
       {adminOpen && <Admin onClose={() => setAdminOpen(false)} />}
+
+      {settingsOpen && (
+        <SettingsSheet
+          lang={lang}
+          user={user}
+          onUserChange={(u) => setUser(u)}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       {deletingGoal && (
         <ConfirmDeleteGoalModal
@@ -248,15 +279,24 @@ function GoalCreatorModal({
   );
 }
 
-function Header({ user, lang, onAdminClick }: { user: User; lang: Lang; onAdminClick?: () => void }) {
+function Header({
+  user,
+  lang,
+  onAdminClick,
+  onSettingsClick,
+}: {
+  user: User;
+  lang: Lang;
+  onAdminClick?: () => void;
+  onSettingsClick?: () => void;
+}) {
   const i = t(lang);
+  const letter = (user.firstName?.[0] ?? user.username?.[0] ?? '·').toUpperCase();
+  const title = user.cosmetics?.title;
   return (
     <header className="flex items-center justify-between mb-6 gap-3">
       <div className="min-w-0 flex items-center gap-3">
-        {/* Monogram avatar */}
-        <div className="shrink-0 w-10 h-10 rounded-pill border border-hairlineStrong bg-elevated grid place-items-center text-sm font-semibold">
-          {(user.firstName?.[0] ?? user.username?.[0] ?? '·').toUpperCase()}
-        </div>
+        <AvatarFrame tier={user.cosmetics?.frame ?? 'none'} letter={letter} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-base font-semibold tracking-tight truncate">
@@ -271,21 +311,36 @@ function Header({ user, lang, onAdminClick }: { user: User; lang: Lang; onAdminC
               </span>
             )}
           </div>
-          <div className="eyebrow mt-0.5">Lv {user.level} · {i.appTitle}</div>
+          <div className="eyebrow mt-0.5 truncate">
+            {title ? (
+              <span className="text-accent">{title}</span>
+            ) : (
+              <span>Lv {user.level} · {i.appTitle}</span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* HUD chips */}
       <div className="flex items-center gap-1.5">
         <HudChip icon={<Flame size={13} className="text-warning" />} value={user.streak.current} />
         <HudChip icon={<Zap size={13} className="text-accent" />} value={user.xpTotal} />
+        {onSettingsClick && (
+          <button
+            onClick={onSettingsClick}
+            aria-label="Settings"
+            className="w-9 h-9 rounded-pill border border-hairline bg-surface/60 grid place-items-center text-muted hover:text-text transition"
+          >
+            <Settings size={15} />
+          </button>
+        )}
         {user.isAdmin && onAdminClick && (
           <button
             onClick={onAdminClick}
             aria-label="Admin"
-            className="w-9 h-9 rounded-pill border border-hairline bg-surface/60 grid place-items-center text-muted hover:text-text transition"
+            className="w-9 h-9 rounded-pill border border-hairline bg-surface/60 grid place-items-center text-accent hover:text-accentGlow transition"
+            title="Admin"
           >
-            <Settings size={15} />
+            <Wrench size={15} />
           </button>
         )}
       </div>

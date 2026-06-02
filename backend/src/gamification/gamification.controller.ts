@@ -1,10 +1,11 @@
-import { BadRequestException, Controller, ForbiddenException, Get, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, ForbiddenException, Get, Post, Query, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from './gamification.service';
 import { LeaguesService } from './leagues.service';
+import { SeasonsService } from './seasons.service';
 import { computeRank, computeAchievements } from './progress-extras';
 import { todayLocalDate } from '../tasks/tasks.service';
 
@@ -15,12 +16,19 @@ export class GamificationController {
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
     private readonly leagues: LeaguesService,
+    private readonly seasons: SeasonsService,
   ) {}
 
   @Get('leagues/me')
   leaguesMe(@CurrentUser() me: AuthenticatedUser) {
     const lang = me.languageCode === 'en' ? 'en' : 'ru';
     return this.leagues.leaguesMe(me.id, lang);
+  }
+
+  @Get('seasons/current')
+  seasonCurrent(@CurrentUser() me: AuthenticatedUser) {
+    const lang = me.languageCode === 'en' ? 'en' : 'ru';
+    return this.seasons.overview(me.id, lang);
   }
 
   @Get('progress')
@@ -112,10 +120,23 @@ export class GamificationController {
     };
   }
 
-  /** Live XP leaderboard: top players + the caller's own rank. */
+  /**
+   * Live XP leaderboard. `scope=global` (default) ranks across all users.
+   * `scope=friends` restricts to the caller's referral graph — every user
+   * they invited + their inviter + sibling referrals + the caller themselves.
+   */
   @Get('leaderboard')
-  async leaderboard(@CurrentUser() me: AuthenticatedUser) {
+  async leaderboard(
+    @CurrentUser() me: AuthenticatedUser,
+    @Query('scope') scope?: string,
+  ) {
+    const isFriends = scope === 'friends';
+
+    const friendIds = isFriends ? await this.friendIds(me.id) : null;
+    const where = friendIds ? { id: { in: friendIds } } : {};
+
     const top = await this.prisma.user.findMany({
+      where,
       orderBy: [{ xpTotal: 'desc' }, { createdAt: 'asc' }],
       take: 20,
       select: { id: true, firstName: true, username: true, xpTotal: true, level: true, streakCurrent: true },
@@ -125,11 +146,15 @@ export class GamificationController {
       where: { id: me.id },
       select: { xpTotal: true },
     });
-    // Rank = how many users have strictly more XP, +1.
-    const ahead = await this.prisma.user.count({ where: { xpTotal: { gt: meRow.xpTotal } } });
-    const totalPlayers = await this.prisma.user.count();
+    const ahead = await this.prisma.user.count({
+      where: friendIds
+        ? { id: { in: friendIds }, xpTotal: { gt: meRow.xpTotal } }
+        : { xpTotal: { gt: meRow.xpTotal } },
+    });
+    const totalPlayers = await this.prisma.user.count({ where });
 
     return {
+      scope: isFriends ? 'friends' : 'global',
       myRank: ahead + 1,
       totalPlayers,
       top: top.map((u, i) => ({
@@ -142,5 +167,32 @@ export class GamificationController {
         isMe: u.id === me.id,
       })),
     };
+  }
+
+  /**
+   * Resolve the caller's referral neighborhood: themselves + everyone they
+   * invited + their inviter + their inviter's other invitees. Bounded set,
+   * cheap to compute on every leaderboard read.
+   */
+  private async friendIds(userId: string): Promise<string[]> {
+    const me = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, referredById: true },
+    });
+    const ids = new Set<string>([me.id]);
+    const direct = await this.prisma.user.findMany({
+      where: { referredById: me.id },
+      select: { id: true },
+    });
+    for (const u of direct) ids.add(u.id);
+    if (me.referredById) {
+      ids.add(me.referredById);
+      const siblings = await this.prisma.user.findMany({
+        where: { referredById: me.referredById },
+        select: { id: true },
+      });
+      for (const u of siblings) ids.add(u.id);
+    }
+    return Array.from(ids);
   }
 }

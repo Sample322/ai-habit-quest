@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown } from 'lucide-react';
+import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown, Trophy, Sparkles } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { t, type Lang } from '../lib/i18n';
-import type { Achievement, AchievementRarity, LeaguesMe, ProgressOverview, Leaderboard, User } from '../lib/types';
+import type { Achievement, AchievementRarity, LeaderboardScope, LeaguesMe, ProgressOverview, Leaderboard, SeasonView, User } from '../lib/types';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
 
@@ -18,14 +18,23 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
   const [data, setData] = useState<ProgressOverview | null>(null);
   const [board, setBoard] = useState<Leaderboard | null>(null);
   const [league, setLeague] = useState<LeaguesMe | null>(null);
+  const [season, setSeason] = useState<SeasonView | null>(null);
+  const [boardScope, setBoardScope] = useState<LeaderboardScope>('global');
   const [freezeMsg, setFreezeMsg] = useState<string | null>(null);
   const [freezeBusy, setFreezeBusy] = useState(false);
 
   useEffect(() => {
     void (async () => setData(await api.progress()))();
-    void (async () => { try { setBoard(await api.leaderboard()); } catch { /* non-fatal */ } })();
     void (async () => { try { setLeague(await api.leaguesMe()); } catch { /* non-fatal */ } })();
+    void (async () => { try { setSeason(await api.season()); } catch { /* non-fatal */ } })();
   }, []);
+
+  // Re-fetch leaderboard whenever the scope toggle changes.
+  useEffect(() => {
+    void (async () => {
+      try { setBoard(await api.leaderboard(boardScope)); } catch { /* non-fatal */ }
+    })();
+  }, [boardScope]);
 
   async function useFreeze(): Promise<void> {
     if (!user.isPremium) { onPremiumClick(); return; }
@@ -158,31 +167,50 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
         </div>
       </section>
 
-      {/* Leaderboard */}
+      {/* Season card */}
+      {season && <SeasonCard season={season} lang={lang} />}
+
+      {/* Leaderboard with scope tabs */}
       {board && (
         <section className="space-y-2.5">
-          <SectionHead
-            title={L('Топ игроков', 'Leaderboard')}
-            right={`#${board.myRank} / ${board.totalPlayers}`}
-          />
-          <div className="card divide-y divide-hairline overflow-hidden">
-            {board.top.slice(0, 12).map((e) => (
-              <div
-                key={e.id}
-                className={`px-4 py-2.5 flex items-center gap-3 transition ${e.isMe ? 'bg-accent/10' : ''}`}
-              >
-                <div className={`w-7 text-center font-bold ${e.position <= 3 ? 'text-warning' : 'text-muted text-xs'}`}>
-                  {e.position === 1 ? '🥇' : e.position === 2 ? '🥈' : e.position === 3 ? '🥉' : e.position}
-                </div>
-                <div className="flex-1 min-w-0 truncate text-sm font-medium">
-                  {e.name}
-                  {e.isMe && <span className="text-accent text-[10px] uppercase tracking-wider ml-1">· {L('ты', 'you')}</span>}
-                </div>
-                <div className="text-[10px] text-muted tabular shrink-0 hidden xs:block">🔥{e.streak}</div>
-                <div className="text-sm font-bold tabular shrink-0 tabular text-text min-w-[3rem] text-right">{e.xp}</div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between px-1">
+            <div className="text-sm font-semibold tracking-tight">{L('Лидерборд', 'Leaderboard')}</div>
+            <div className="text-[11px] text-muted tabular">#{board.myRank} / {board.totalPlayers}</div>
           </div>
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-pill bg-elevated border border-hairline">
+            <ScopeTab active={boardScope === 'global'} onClick={() => setBoardScope('global')}>
+              {i.progress.tabGlobal}
+            </ScopeTab>
+            <ScopeTab active={boardScope === 'friends'} onClick={() => setBoardScope('friends')}>
+              {i.progress.tabFriends}
+            </ScopeTab>
+          </div>
+          {board.top.length === 0 ? (
+            <div className="card p-6 text-center text-sm text-muted">
+              {boardScope === 'friends'
+                ? L('Пригласи друзей — увидишь свой круг здесь.', 'Invite friends to populate this board.')
+                : L('Пусто.', 'Empty.')}
+            </div>
+          ) : (
+            <div className="card divide-y divide-hairline overflow-hidden">
+              {board.top.slice(0, 12).map((e) => (
+                <div
+                  key={e.id}
+                  className={`px-4 py-2.5 flex items-center gap-3 transition ${e.isMe ? 'bg-accent/10' : ''}`}
+                >
+                  <div className={`w-7 text-center font-bold ${e.position <= 3 ? 'text-warning' : 'text-muted text-xs'}`}>
+                    {e.position === 1 ? '🥇' : e.position === 2 ? '🥈' : e.position === 3 ? '🥉' : e.position}
+                  </div>
+                  <div className="flex-1 min-w-0 truncate text-sm font-medium">
+                    {e.name}
+                    {e.isMe && <span className="text-accent text-[10px] uppercase tracking-wider ml-1">· {L('ты', 'you')}</span>}
+                  </div>
+                  <div className="text-[10px] text-muted tabular shrink-0">🔥{e.streak}</div>
+                  <div className="text-sm font-bold tabular shrink-0 text-text min-w-[3rem] text-right">{e.xp}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -203,6 +231,70 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
         </button>
       )}
     </div>
+  );
+}
+
+function SeasonCard({ season, lang }: { season: SeasonView; lang: Lang }) {
+  const i = t(lang);
+  const L = (ru: string, en: string): string => (lang === 'en' ? en : ru);
+  return (
+    <section className="card aurora p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 w-11 h-11 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+          <Trophy size={18} className="text-white" />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Sparkles size={13} className="text-accentGlow" />
+            <span className="eyebrow">{i.progress.season} {season.number}</span>
+          </div>
+          <div className="text-base font-bold leading-tight mt-0.5">
+            {season.daysLeft}d <span className="text-muted font-normal text-sm">{i.progress.seasonDaysLeft}</span>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="hud-num text-3xl leading-none">#{season.myRank}</div>
+          <div className="eyebrow mt-1 tabular">{season.myXp} XP</div>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <div className="eyebrow text-muted px-1">{i.progress.seasonRewards}</div>
+        {season.rewardTiers.map((tier) => {
+          const inTier = season.myRank <= tier.maxRank;
+          return (
+            <div
+              key={tier.maxRank}
+              className={`rounded-pill px-3 py-1.5 flex items-center gap-2 text-xs border ${
+                inTier ? 'border-positive/40 bg-positive/10 text-text' : 'border-hairline bg-bg/30 text-muted'
+              }`}
+            >
+              <span className={`shrink-0 w-5 h-5 rounded-pill grid place-items-center text-[10px] font-bold ${inTier ? 'bg-positive text-bg' : 'bg-white/5 text-muted'}`}>
+                {tier.maxRank === 1 ? '🥇' : tier.maxRank}
+              </span>
+              <span className="flex-1 font-medium">
+                {i.progress.seasonRewardTier
+                  .replace('{n}', String(tier.maxRank))
+                  .replace('{d}', String(tier.days))}
+              </span>
+              {inTier && <span className="text-positive text-[10px] uppercase tracking-wider font-bold">{L('Идёшь!', 'On track!')}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ScopeTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-pill py-2 text-sm font-semibold transition ${
+        active ? 'bg-accentGrad text-white shadow-glow' : 'text-muted hover:text-text'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
