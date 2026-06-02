@@ -9,6 +9,7 @@ import { PaymentsService } from '../payments/payments.service';
 export class BotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotService.name);
   private bot?: Bot;
+  private mode: 'webhook' | 'long-polling' | 'disabled' = 'disabled';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -22,13 +23,16 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('TELEGRAM_BOT_TOKEN is empty — bot disabled');
       return;
     }
-    this.bot = new Bot(token);
+
+    // Route all Telegram API calls through the Cloudflare Worker proxy when
+    // TELEGRAM_API_ROOT is set. This fixes the RU-host → api.telegram.org
+    // connectivity flap. Defaults to direct Telegram API for local dev.
+    const apiRoot = envString('TELEGRAM_API_ROOT', '').replace(/\/+$/, '');
+    this.bot = new Bot(token, apiRoot ? { client: { apiRoot } } : {});
+    if (apiRoot) this.logger.log(`Telegram apiRoot=${apiRoot}`);
 
     this.bot.command('start', async (ctx) => {
       const botUsername = envString('TELEGRAM_BOT_USERNAME', '');
-      // Main Mini App deep link: t.me/<bot>?startapp=... opens the bot's Main
-      // Mini App. Requires "Main Mini App" enabled in BotFather. We use a URL
-      // button (not .webApp(), which rejects t.me links with BUTTON_URL_INVALID).
       const buttonUrl = botUsername ? `https://t.me/${botUsername}?startapp=start` : undefined;
       const isRu = ctx.from?.language_code?.startsWith('ru');
       const kb = buttonUrl
@@ -76,7 +80,6 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
     // -----------------------------------------------------------------------
     // Telegram Stars payment flow
     // -----------------------------------------------------------------------
-    // 1) Pre-checkout: must approve within 10s, else Telegram cancels.
     this.bot.on('pre_checkout_query', async (ctx) => {
       try {
         await ctx.answerPreCheckoutQuery(true);
@@ -85,7 +88,6 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    // 2) Successful payment: upgrade user to Premium.
     this.bot.on(':successful_payment', async (ctx) => {
       const pay = ctx.message?.successful_payment;
       const telegramId = ctx.from?.id;
@@ -117,17 +119,71 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     this.bot.catch((err) => this.logger.error(`Bot error: ${err}`));
 
-    // Long-polling only. Webhook delivery to this Timeweb RU host is unreliable
-    // (Telegram's servers get "Connection timed out" reaching the IP), so we
-    // use outbound long-polling, which is robust here. Detached so it never
-    // blocks app bootstrap / the platform healthcheck.
+    // -----------------------------------------------------------------------
+    // Mode selection: webhook (preferred, used in production via the CF Worker
+    // proxy) vs long-polling (fallback for local dev or if the webhook URL is
+    // unset). Webhook mode requires the controller to forward updates to
+    // `this.handleUpdate()`.
+    // -----------------------------------------------------------------------
+    const webhookUrl = envString('TELEGRAM_WEBHOOK_URL', '');
+    const webhookSecret = envString('TELEGRAM_WEBHOOK_SECRET', '');
+
+    if (webhookUrl) {
+      // grammy's `init()` calls getMe() once so middleware that depends on
+      // `bot.botInfo` works inside webhook handlers.
+      await this.bot.init();
+      try {
+        await this.bot.api.setWebhook(webhookUrl, {
+          secret_token: webhookSecret || undefined,
+          drop_pending_updates: false,
+          allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
+        });
+        this.mode = 'webhook';
+        this.logger.log(`Bot in webhook mode → ${webhookUrl} (@${this.bot.botInfo.username})`);
+      } catch (err) {
+        this.logger.error(`setWebhook failed: ${(err as Error).message}. Falling back to long-polling.`);
+        this.startLongPolling();
+      }
+    } else {
+      this.startLongPolling();
+    }
+  }
+
+  private startLongPolling(): void {
+    if (!this.bot) return;
+    this.mode = 'long-polling';
     void this.bot.start({
       onStart: (info) => this.logger.log(`Bot started in long-polling mode as @${info.username}`),
     });
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.bot) await this.bot.stop();
+    if (!this.bot) return;
+    if (this.mode === 'long-polling') {
+      await this.bot.stop();
+    }
+    // In webhook mode there is no long-running task to stop. Don't remove the
+    // webhook on shutdown — that would deafen the bot until next boot.
+  }
+
+  /**
+   * Hand a raw Telegram update to grammy. Called by `BotController` when the
+   * Worker forwards a webhook payload. No-op if the bot isn't initialised yet.
+   */
+  async handleUpdate(update: unknown): Promise<void> {
+    if (!this.bot) return;
+    await this.bot.handleUpdate(update as Parameters<Bot['handleUpdate']>[0]);
+  }
+
+  /** True when an incoming webhook secret matches the configured one. */
+  verifyWebhookSecret(provided: string | undefined): boolean {
+    const expected = envString('TELEGRAM_WEBHOOK_SECRET', '');
+    if (!expected) return true; // no secret configured → allow (dev only)
+    return !!provided && provided === expected;
+  }
+
+  modeForStatus(): 'webhook' | 'long-polling' | 'disabled' {
+    return this.mode;
   }
 
   async sendReminder(chatId: bigint, text: string): Promise<void> {

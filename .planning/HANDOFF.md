@@ -120,9 +120,13 @@ Admin user id: `cmppnbehu000111u029hid5l0`. JWT_SECRET (rotated): `59c399a78b175
 
 ## What's broken / pending — by urgency
 
-### 🔴 1. Bot ↔ Telegram connectivity (RU host) — the launch blocker
-Telegram blocked in RU; backend on Timeweb RU host can't reliably reach `api.telegram.org`. Long-polling eventually connects (~10 min after restart) but flaps; webhook gets `Connection timed out` from Telegram. **Mini App unaffected** (loads via user VPN). **Blocks:** Stars payments + bot reminders.
-**Fix options (core stays on RU):** (a) move thin bot layer to **Cloudflare Workers** (free, global, webhook both ways) calling back to RU backend for data; (b) route bot's Telegram calls through a non-RU SOCKS5/HTTPS proxy (grammy supports it). Webhook code already exists but is reverted to long-polling — see `bot.service.ts`.
+### 🟡 1. Bot ↔ Telegram connectivity — Cloudflare Worker proxy ready, awaits CF deploy
+Backend code now supports webhook mode through a Cloudflare Worker proxy that handles both directions (RU backend → CF Worker → `api.telegram.org`, and Telegram → CF Worker → RU backend `/bot/webhook`). All code merged on `master`; activation needs three things done by the owner once:
+1. Deploy the Worker: `cd infra/cloudflare-worker && npm install && npx wrangler login && npx wrangler secret put BACKEND_BASE && npx wrangler secret put WEBHOOK_SECRET && npm run deploy`
+2. Set the three env vars on `ahq-backend`: `TELEGRAM_API_ROOT=$WORKER_URL`, `TELEGRAM_WEBHOOK_URL=$WORKER_URL/webhook`, `TELEGRAM_WEBHOOK_SECRET=<same secret>` (use `tw set-env backend KEY=VAL ...`).
+3. Redeploy backend; on boot it calls `setWebhook` via the Worker and flips into webhook mode. Verify with `curl …/bot/status` → `{"mode":"webhook"}`.
+
+Full step-by-step in `infra/cloudflare-worker/README.md`. Until the Worker is up, backend stays on long-polling (existing behavior — no regression). Long-polling fallback is automatic if `TELEGRAM_WEBHOOK_URL` is unset or `setWebhook` fails.
 
 ### 🟡 2. Telegram Stars — code ready, not activated
 `bot.service.ts` handles `pre_checkout_query` + `:successful_payment` → `payments.handleStarsSuccessFromBot` (idempotent). Blocked by #1. Activate after bot is reliable.

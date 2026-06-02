@@ -1,0 +1,10 @@
+name = "ahq-bot-proxy"
+main = "src/worker.ts"
+compatibility_date = "2025-01-15"
+
+# No KV / D1 needed — pure proxy.
+# Secrets (BACKEND_BASE, WEBHOOK_SECRET) are set via `wrangler secret put`
+# or in the Cloudflare dashboard → Workers → Settings → Variables.
+
+[observability]
+enabled = true
