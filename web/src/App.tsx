@@ -22,6 +22,7 @@ export function App() {
   const [lang, setLang] = useState<Lang>(detectLanguage());
   const [user, setUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<Goal[] | null>(null);
+  const [todayRefreshKey, setTodayRefreshKey] = useState(0);
   const [tab, setTab] = useState<Tab>('today');
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [goalCreatorOpen, setGoalCreatorOpen] = useState(false);
@@ -134,6 +135,7 @@ export function App() {
           lang={lang}
           user={user}
           activeGoalsCount={(goals ?? []).filter((g) => g.status === 'active').length}
+          refreshKey={todayRefreshKey}
           onUserChange={(u) => setUser(u)}
           onPremiumClick={() => setSubscriptionOpen(true)}
           onAddGoal={() => setGoalCreatorOpen(true)}
@@ -175,6 +177,10 @@ export function App() {
             setGoalCreatorOpen(false);
             await refreshUser();
             await refreshGoals();
+            // Tell Today to re-fetch its tasks so the new goal's daily tasks
+            // appear immediately. The increment is what changes the useEffect
+            // dep, so even rapid back-to-back creates trigger reloads.
+            setTodayRefreshKey((k) => k + 1);
           }}
         />
       )}

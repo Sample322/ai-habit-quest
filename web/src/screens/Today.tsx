@@ -14,6 +14,8 @@ interface TodayProps {
   lang: Lang;
   user: User;
   activeGoalsCount: number;
+  /** External version counter; bumping it forces a tasks re-fetch. */
+  refreshKey: number;
   onUserChange: (u: User) => void;
   onPremiumClick: () => void;
   onAddGoal: () => void;
@@ -33,6 +35,7 @@ export function Today({
   lang,
   user,
   activeGoalsCount,
+  refreshKey,
   onUserChange,
   onPremiumClick,
   onAddGoal,
@@ -56,7 +59,7 @@ export function Today({
   useEffect(() => {
     void load();
     void (async () => { try { setBonus(await api.bonusToday()); } catch { /* ignore */ } })();
-  }, [load]);
+  }, [load, refreshKey]);
 
   async function completeBonus(): Promise<void> {
     if (!bonus || bonus.doneAt || bonusBusy) return;
@@ -339,7 +342,7 @@ function GoalSection({
 }) {
   const i = t(lang);
   return (
-    <section className="space-y-2.5">
+    <section className="space-y-2.5 animate-rise">
       {/* Goal header — title + thin progress + actions */}
       <div className="flex items-center gap-2 px-1">
         <div className="min-w-0 flex-1">

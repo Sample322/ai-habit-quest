@@ -50,6 +50,29 @@ body::before {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Telegram in-app webview occasionally overrides form-field defaults with
+ * white-on-white from the host theme. Force the dark-luxury palette so the
+ * caret + typed text are always readable, regardless of TG light/dark mode. */
+input,
+textarea,
+select {
+  color-scheme: dark;
+  color: theme('colors.text');
+  -webkit-text-fill-color: theme('colors.text');
+  caret-color: theme('colors.accent');
+}
+input::placeholder,
+textarea::placeholder {
+  color: theme('colors.dim');
+  -webkit-text-fill-color: theme('colors.dim');
+}
+input:-webkit-autofill,
+textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px theme('colors.elevated') inset !important;
+  -webkit-text-fill-color: theme('colors.text') !important;
+  caret-color: theme('colors.accent');
+}
+
 /* Make all numbers tabular by default — critical for HUD readability. */
 .tabular,
 .num {

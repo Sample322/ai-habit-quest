@@ -151,7 +151,8 @@ export function Onboarding({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={i.onboarding.titlePlaceholder}
-                  className="mt-2 w-full bg-bg/60 rounded-card px-4 py-3.5 outline-none border border-hairline focus:border-accent transition text-base placeholder:text-dim"
+                  className="mt-2 w-full appearance-none bg-elevated text-text caret-accent rounded-card px-4 py-3.5 outline-none border border-hairline focus:border-accent transition text-base placeholder:text-dim"
+                  style={{ colorScheme: 'dark', WebkitTextFillColor: '#f5f7fb' }}
                 />
               </div>
               {error && (
