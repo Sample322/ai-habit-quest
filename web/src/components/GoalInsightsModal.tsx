@@ -41,9 +41,9 @@ export function GoalInsightsModal({ lang, goalId, onClose }: Props) {
         ) : (
           <>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="eyebrow text-accent">{i.progress.heatmap}</div>
-                <div className="text-lg font-bold mt-0.5 leading-tight truncate">{data.goalTitle}</div>
+                <div className="text-lg font-bold mt-0.5 leading-tight break-words">{data.goalTitle}</div>
               </div>
               <button
                 onClick={onClose}
@@ -56,19 +56,20 @@ export function GoalInsightsModal({ lang, goalId, onClose }: Props) {
 
             <div className="grid grid-cols-3 gap-2">
               <InsightStat
-                icon={<Calendar size={13} className="text-accent" />}
+                icon={<Calendar size={12} className="text-accent" />}
                 label={i.progress.goalDay}
                 value={`${data.dayIndex}`}
                 sub={`${i.progress.goalOf} ${data.horizonDays}`}
               />
               <InsightStat
-                icon={<Target size={13} className="text-warning" />}
-                label={i.progress.goalCompletion}
+                icon={<Target size={12} className="text-warning" />}
+                label={lang === 'en' ? 'Rate' : 'Процент'}
                 value={`${data.completionPct}%`}
+                sub=" "
               />
               <InsightStat
-                icon={<CheckCircle2 size={13} className="text-positive" />}
-                label="✓"
+                icon={<CheckCircle2 size={12} className="text-positive" />}
+                label={lang === 'en' ? 'Done' : 'Сделано'}
                 value={`${data.completedAllTime}`}
                 sub={`/ ${data.totalAllTime}`}
               />
@@ -96,6 +97,14 @@ function InsightStat({ icon, label, value, sub }: { icon: React.ReactNode; label
   );
 }
 
+function cellColor(ratio: number, isEmpty: boolean): string {
+  if (isEmpty) return 'rgba(255,255,255,0.07)';
+  if (ratio >= 1) return '#19d57a';
+  if (ratio >= 0.66) return '#7c5cff';
+  if (ratio >= 0.33) return '#5d44d0';
+  return '#3d2e94';
+}
+
 function Heatmap({ days }: { days: { date: string; total: number; done: number }[] }) {
   return (
     <div className="space-y-2">
@@ -104,21 +113,12 @@ function Heatmap({ days }: { days: { date: string; total: number; done: number }
         {days.map((d) => {
           const ratio = d.total === 0 ? 0 : d.done / d.total;
           const isEmpty = d.total === 0;
-          const isPerfect = ratio === 1;
-          const op = isEmpty ? 0.08 : 0.25 + ratio * 0.75;
           return (
             <div
               key={d.date}
               title={`${d.date}: ${d.done}/${d.total}`}
               className="aspect-square rounded-sm transition"
-              style={{
-                background: isEmpty
-                  ? 'rgba(255,255,255,0.06)'
-                  : isPerfect
-                  ? 'linear-gradient(135deg,#19d57a 0%,#5fe3a6 100%)'
-                  : 'linear-gradient(135deg,#7c5cff 0%,#9b7dff 100%)',
-                opacity: op,
-              }}
+              style={{ background: cellColor(ratio, isEmpty) }}
             />
           );
         })}
@@ -126,17 +126,14 @@ function Heatmap({ days }: { days: { date: string; total: number; done: number }
       <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted">
         <span>0</span>
         <div className="flex gap-0.5">
-          {[0.2, 0.4, 0.6, 0.8, 1].map((v) => (
-            <span
-              key={v}
-              className="w-3 h-3 rounded-sm"
-              style={{
-                background: v === 1
-                  ? 'linear-gradient(135deg,#19d57a 0%,#5fe3a6 100%)'
-                  : 'linear-gradient(135deg,#7c5cff 0%,#9b7dff 100%)',
-                opacity: v,
-              }}
-            />
+          {[
+            'rgba(255,255,255,0.07)',
+            '#3d2e94',
+            '#5d44d0',
+            '#7c5cff',
+            '#19d57a',
+          ].map((c) => (
+            <span key={c} className="w-3 h-3 rounded-sm" style={{ background: c }} />
           ))}
         </div>
         <span>100%</span>

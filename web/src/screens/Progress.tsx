@@ -128,14 +128,14 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
             {data.last7.reduce((s, d) => s + d.done, 0)}/{data.last7.reduce((s, d) => s + d.total, 0)}
           </div>
         </div>
-        <div className="flex items-end gap-1.5 h-24">
+        <div className="grid grid-cols-7 gap-1.5">
           {data.last7.map((d) => {
             const ratio = d.total === 0 ? 0 : d.done / d.total;
             const heightPct = Math.max(4, Math.round(ratio * 100));
             const isPerfect = ratio === 1;
             return (
-              <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full flex-1 bg-white/[0.04] rounded-sm relative overflow-hidden">
+              <div key={d.date} className="flex flex-col items-center gap-1.5">
+                <div className="w-full h-24 bg-white/[0.05] rounded-sm relative overflow-hidden">
                   <div
                     className={`absolute bottom-0 inset-x-0 rounded-sm transition-all duration-700 ${isPerfect ? 'bg-successGrad' : 'bg-accentGrad'}`}
                     style={{ height: `${heightPct}%`, opacity: ratio === 0 ? 0.2 : 1 }}
