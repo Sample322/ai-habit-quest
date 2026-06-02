@@ -67,8 +67,13 @@ model User {
   streakFreezesLeft  Int      @default(2)
   streakFreezesMonth String?              // "YYYY-MM" in user's TZ
   streakFreezeDates  String[] @default([])
-  // D5: anti-abuse — inviter rewarded only after invitee completes first task.
-  referralRewarded Boolean @default(false)
+  // D5 / referral 2.0:
+  // - referralRewarded: inviter has been paid +3d (one-shot, on invitee's first goal create)
+  // - referralGiftClaimedAt: timestamp when invitee got their welcome +3d gift
+  // - referralGiftReminderSent: bot DM sent once after gift expires
+  referralRewarded         Boolean   @default(false)
+  referralGiftClaimedAt    DateTime?
+  referralGiftReminderSent Boolean   @default(false)
   referralCode  String   @unique
   referredById  String?
   referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])

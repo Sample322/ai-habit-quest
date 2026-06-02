@@ -80,6 +80,9 @@ export class GoalsService {
     const title = input.title?.trim();
     if (!title || title.length < 2) throw new BadRequestException('Goal title is too short');
 
+    const previousGoalCount = await this.prisma.goal.count({ where: { userId } });
+    const isFirstGoalEver = previousGoalCount === 0;
+
     const activeCount = await this.prisma.goal.count({
       where: { userId, status: GoalStatus.active },
     });
@@ -102,6 +105,18 @@ export class GoalsService {
         status: GoalStatus.active,
       },
     });
+
+    // Referral 2.0: trigger on FIRST goal creation by an invitee.
+    // - inviter gets +3d Premium (unchanged)
+    // - invitee gets +3d "welcome gift" Premium (new), tracked so the bot can
+    //   nudge them about a paid plan once it expires.
+    if (isFirstGoalEver) {
+      try {
+        await this.applyReferralRewards(userId);
+      } catch (err) {
+        this.logger.warn(`referral rewards failed for ${userId}: ${(err as Error).message}`);
+      }
+    }
 
     // Generate plan + persist habits immediately so the day-1 loop works.
     await this.plans.generateForGoal(goal.id, {
@@ -269,6 +284,59 @@ export class GoalsService {
       completionPct,
       heatmap,
     };
+  }
+
+  /**
+   * Referral rewards (one-shot, on invitee's first goal):
+   *   • inviter gains +3d Premium (skips admin-sentinel users)
+   *   • invitee receives +3d "welcome gift" Premium with claim timestamp,
+   *     so notifications.scheduler can DM them once the gift runs out.
+   */
+  private async applyReferralRewards(inviteeId: string): Promise<void> {
+    const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z').getTime();
+    const GIFT_MS = 3 * 24 * 60 * 60 * 1000;
+
+    const invitee = await this.prisma.user.findUnique({ where: { id: inviteeId } });
+    if (!invitee || !invitee.referredById || invitee.referralRewarded) return;
+
+    const inviter = await this.prisma.user.findUnique({ where: { id: invitee.referredById } });
+    if (!inviter) {
+      await this.prisma.user.update({ where: { id: inviteeId }, data: { referralRewarded: true } });
+      return;
+    }
+
+    const now = new Date();
+
+    // Inviter +3d (skip if admin sentinel).
+    if (!(inviter.premiumUntil && inviter.premiumUntil.getTime() === ADMIN_SENTINEL)) {
+      const base = inviter.premiumUntil && inviter.premiumUntil > now ? inviter.premiumUntil : now;
+      await this.prisma.user.update({
+        where: { id: inviter.id },
+        data: { isPremium: true, premiumUntil: new Date(base.getTime() + GIFT_MS) },
+      });
+    }
+
+    // Invitee +3d welcome gift (skip if already long-term premium / admin).
+    const isAdmin = invitee.premiumUntil && invitee.premiumUntil.getTime() === ADMIN_SENTINEL;
+    if (!isAdmin) {
+      const base = invitee.premiumUntil && invitee.premiumUntil > now ? invitee.premiumUntil : now;
+      await this.prisma.user.update({
+        where: { id: inviteeId },
+        data: {
+          isPremium: true,
+          premiumUntil: new Date(base.getTime() + GIFT_MS),
+          referralGiftClaimedAt: now,
+          referralRewarded: true,
+        },
+      });
+    } else {
+      await this.prisma.user.update({
+        where: { id: inviteeId },
+        data: { referralRewarded: true },
+      });
+    }
+
+    this.logger.log(`Referral rewards applied: inviter=${inviter.id} +3d, invitee=${inviteeId} +3d gift`);
   }
 
   private async findGoalOrThrow(goalId: string, userId: string): Promise<Goal> {

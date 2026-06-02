@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown, Infinity as InfinityIcon } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -29,11 +29,14 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
 
   useEffect(() => { void loadStats(); void loadUsers(); void loadFeedback(); }, [loadStats, loadUsers, loadFeedback]);
 
-  async function togglePremium(u: AdminUser): Promise<void> {
+  async function grantPremium(
+    u: AdminUser,
+    opts: { isPremium: boolean; days?: number; forever?: boolean },
+  ): Promise<void> {
     setBusyId(u.id);
     haptic('medium');
     try {
-      const res = await api.adminSetPremium(u.id, !u.isPremium);
+      const res = await api.adminSetPremium(u.id, opts);
       setUsers((prev) => prev?.map((x) => (x.id === u.id ? { ...x, isPremium: res.isPremium, premiumUntil: res.premiumUntil } : x)) ?? null);
       notify('success');
       void loadStats();
@@ -92,7 +95,7 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
             query={query}
             setQuery={setQuery}
             onSearch={() => loadUsers(query.trim() || undefined)}
-            onToggle={togglePremium}
+            onGrant={grantPremium}
             busyId={busyId}
           />
         )}
@@ -170,15 +173,17 @@ function StatTile({ label, value, sub, accent }: { label: string; value: number 
 }
 
 function UsersView({
-  users, query, setQuery, onSearch, onToggle, busyId,
+  users, query, setQuery, onSearch, onGrant, busyId,
 }: {
   users: AdminUser[] | null;
   query: string;
   setQuery: (q: string) => void;
   onSearch: () => void;
-  onToggle: (u: AdminUser) => void;
+  onGrant: (u: AdminUser, opts: { isPremium: boolean; days?: number; forever?: boolean }) => Promise<void>;
   busyId: string | null;
 }): JSX.Element {
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+
   return (
     <div className="space-y-3">
       <form onSubmit={(e) => { e.preventDefault(); onSearch(); }} className="flex gap-2">
@@ -202,38 +207,129 @@ function UsersView({
       )}
       <div className="space-y-2 stagger">
         {users?.map((u) => (
-          <div key={u.id} className="card p-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm truncate">
-                {u.firstName || u.username || 'без имени'}
-                {u.username && <span className="text-muted text-xs"> @{u.username}</span>}
-              </div>
-              <div className="text-[10px] text-muted mt-0.5 tabular flex items-center gap-2">
-                <span>tg:{u.telegramId}</span>
-                <span>·</span>
-                <span>🔥{u.streakCurrent}</span>
-                <span>⭐{u.xpTotal}</span>
-                <span>Lv{u.level}</span>
-              </div>
-            </div>
-            <button
-              onClick={() => onToggle(u)}
-              disabled={busyId === u.id}
-              className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-pill border transition disabled:opacity-50 flex items-center gap-1 ${
-                u.isPremium ? 'border-accent bg-accent/10 text-accent' : 'border-hairlineStrong text-muted hover:text-text'
-              }`}
-            >
-              {busyId === u.id ? '…' : (
-                <>
-                  <Crown size={11} />
-                  {u.isPremium ? 'Pro' : '+ Pro'}
-                </>
-              )}
-            </button>
-          </div>
+          <UserRow
+            key={u.id}
+            user={u}
+            busy={busyId === u.id}
+            menuOpen={menuFor === u.id}
+            onOpenMenu={() => setMenuFor(menuFor === u.id ? null : u.id)}
+            onCloseMenu={() => setMenuFor(null)}
+            onGrant={async (opts) => {
+              await onGrant(u, opts);
+              setMenuFor(null);
+            }}
+          />
         ))}
       </div>
     </div>
+  );
+}
+
+function UserRow({
+  user, busy, menuOpen, onOpenMenu, onCloseMenu, onGrant,
+}: {
+  user: AdminUser;
+  busy: boolean;
+  menuOpen: boolean;
+  onOpenMenu: () => void;
+  onCloseMenu: () => void;
+  onGrant: (opts: { isPremium: boolean; days?: number; forever?: boolean }) => void | Promise<void>;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  // Click outside the menu closes it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onCloseMenu();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen, onCloseMenu]);
+
+  const isAdminSentinel = user.premiumUntil
+    ? new Date(user.premiumUntil).getUTCFullYear() === 2099
+    : false;
+  const premiumLabel = isAdminSentinel
+    ? '∞'
+    : user.isPremium && user.premiumUntil
+    ? new Date(user.premiumUntil).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
+    : '';
+
+  return (
+    <div ref={ref} className="relative card p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm truncate">
+            {user.firstName || user.username || 'без имени'}
+            {user.username && <span className="text-muted text-xs"> @{user.username}</span>}
+          </div>
+          <div className="text-[10px] text-muted mt-0.5 tabular flex items-center gap-2 flex-wrap">
+            <span>tg:{user.telegramId}</span>
+            <span>·</span>
+            <span>🔥{user.streakCurrent}</span>
+            <span>⭐{user.xpTotal}</span>
+            <span>Lv{user.level}</span>
+            {premiumLabel && <span className="text-accent">· {premiumLabel}</span>}
+          </div>
+        </div>
+        <button
+          onClick={onOpenMenu}
+          disabled={busy}
+          className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-pill border transition disabled:opacity-50 flex items-center gap-1 ${
+            user.isPremium ? 'border-accent bg-accent/10 text-accent' : 'border-hairlineStrong text-muted hover:text-text'
+          }`}
+        >
+          {busy ? '…' : (
+            <>
+              {isAdminSentinel ? <InfinityIcon size={11} /> : <Crown size={11} />}
+              {user.isPremium ? 'Pro' : '+ Pro'}
+            </>
+          )}
+        </button>
+      </div>
+      {menuOpen && (
+        <div className="mt-3 pt-3 border-t border-hairline space-y-1.5 animate-fade-in">
+          <div className="eyebrow mb-1">Grant Premium</div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <MenuChip onClick={() => onGrant({ isPremium: true, days: 7 })}>+7 дней</MenuChip>
+            <MenuChip onClick={() => onGrant({ isPremium: true, days: 30 })}>+30 дней</MenuChip>
+            <MenuChip onClick={() => onGrant({ isPremium: true, days: 90 })}>+90 дней</MenuChip>
+            <MenuChip onClick={() => onGrant({ isPremium: true, days: 365 })}>+1 год</MenuChip>
+            <MenuChip onClick={() => onGrant({ isPremium: true, forever: true })} accent>
+              <InfinityIcon size={11} className="inline mr-1" />бессрочно
+            </MenuChip>
+            {user.isPremium && (
+              <MenuChip onClick={() => onGrant({ isPremium: false })} danger>
+                снять
+              </MenuChip>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuChip({
+  onClick, children, accent, danger,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  accent?: boolean;
+  danger?: boolean;
+}) {
+  const cls = accent
+    ? 'border-accent bg-accent/10 text-accent'
+    : danger
+    ? 'border-danger/40 bg-danger/5 text-danger'
+    : 'border-hairlineStrong text-text bg-white/[0.02] hover:bg-white/[0.06]';
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-pill border px-2 py-1.5 text-[11px] font-semibold transition active:scale-95 ${cls}`}
+    >
+      {children}
+    </button>
   );
 }
 

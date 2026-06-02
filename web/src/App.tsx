@@ -21,7 +21,7 @@ type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 export function App() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [lang, setLang] = useState<Lang>(detectLanguage());
+  const [fallbackLang] = useState<Lang>(detectLanguage());
   const [user, setUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<Goal[] | null>(null);
   const [todayRefreshKey, setTodayRefreshKey] = useState(0);
@@ -33,12 +33,15 @@ export function App() {
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Derive `lang` from the user so any `setUser(...)` (settings sheet, etc.)
+  // instantly re-themes the UI. Fall back to the browser-detected language
+  // until the first /me load completes.
+  const lang: Lang = user?.languageCode ?? fallbackLang;
   const i = t(lang);
 
   const refreshUser = useCallback(async () => {
     const me = await api.me();
     setUser(me);
-    setLang(me.languageCode);
   }, []);
 
   const refreshGoals = useCallback(async () => {
@@ -311,13 +314,13 @@ function Header({
               </span>
             )}
           </div>
-          <div className="eyebrow mt-0.5 truncate">
-            {title ? (
-              <span className="text-accent">{title}</span>
-            ) : (
-              <span>Lv {user.level} · {i.appTitle}</span>
-            )}
-          </div>
+          {title ? (
+            <div className="mt-0.5 text-[11px] font-semibold text-accent truncate leading-tight">
+              {title}
+            </div>
+          ) : (
+            <div className="eyebrow mt-0.5 truncate">Lv {user.level} · {i.appTitle}</div>
+          )}
         </div>
       </div>
 

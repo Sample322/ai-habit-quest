@@ -130,10 +130,13 @@ export const api = {
   adminStats: () => request<AdminStats>('/app-admin/stats'),
   adminUsers: (q?: string) =>
     request<AdminUser[]>(`/app-admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
-  adminSetPremium: (id: string, isPremium: boolean) =>
+  adminSetPremium: (
+    id: string,
+    opts: { isPremium: boolean; days?: number; forever?: boolean },
+  ) =>
     request<{ id: string; isPremium: boolean; premiumUntil: string | null }>(
       `/app-admin/users/${id}/premium`,
-      { method: 'POST', body: JSON.stringify({ isPremium }) },
+      { method: 'POST', body: JSON.stringify(opts) },
     ),
   adminFeedback: () => request<AdminFeedback[]>('/app-admin/feedback'),
 };

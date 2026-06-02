@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,9 +9,20 @@ class SetPremiumDto {
   @IsBoolean()
   isPremium!: boolean;
 
+  /** Pass a concrete date or omit (defaults to +31d). Ignored if `days` set. */
   @IsOptional() @IsString()
   until?: string;
+
+  /** Convenience: grant N days of Premium from now. Overrides `until`. */
+  @IsOptional() @IsInt() @Min(1)
+  days?: number;
+
+  /** Grant the admin "forever" sentinel (2099-12-31). Highest priority. */
+  @IsOptional() @IsBoolean()
+  forever?: boolean;
 }
+
+const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z');
 
 /**
  * In-app admin API — same data as the Basic-auth /admin/* endpoints, but
@@ -89,10 +100,16 @@ export class AppAdminController {
 
   @Post('users/:id/premium')
   async setPremium(@Param('id') id: string, @Body() body: SetPremiumDto) {
-    const until = body.until ? new Date(body.until) : new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+    let premiumUntil: Date | null = null;
+    if (body.isPremium) {
+      if (body.forever) premiumUntil = ADMIN_SENTINEL;
+      else if (body.days && body.days > 0) premiumUntil = new Date(Date.now() + body.days * 24 * 60 * 60 * 1000);
+      else if (body.until) premiumUntil = new Date(body.until);
+      else premiumUntil = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+    }
     const u = await this.prisma.user.update({
       where: { id },
-      data: { isPremium: body.isPremium, premiumUntil: body.isPremium ? until : null },
+      data: { isPremium: body.isPremium, premiumUntil },
     });
     return { id: u.id, isPremium: u.isPremium, premiumUntil: u.premiumUntil };
   }

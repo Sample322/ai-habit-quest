@@ -276,7 +276,7 @@ function SeasonCard({ season, lang }: { season: SeasonView; lang: Lang }) {
                   .replace('{n}', String(tier.maxRank))
                   .replace('{d}', String(tier.days))}
               </span>
-              {inTier && <span className="text-positive text-[10px] uppercase tracking-wider font-bold">{L('Идёшь!', 'On track!')}</span>}
+              {inTier && <span className="text-positive text-[10px] uppercase tracking-wider font-bold">{L('Проходишь', 'Qualifying')}</span>}
             </div>
           );
         })}

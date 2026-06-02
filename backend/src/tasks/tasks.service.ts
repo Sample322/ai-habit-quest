@@ -84,16 +84,7 @@ export class TasksService {
       },
     });
 
-    // First-time toggle ever? Reward the inviter (D5 anti-abuse: pay only after
-    // invitee actually does something, not at signup). Best-effort — never
-    // break the toggle flow over a referral hiccup.
-    if (markingDone) {
-      try {
-        await this.maybeRewardInviter(userId);
-      } catch {
-        // ignore — referral is bonus, must not impact core toggle
-      }
-    }
+    // Referral rewards moved to goals.service.createForUser (first goal trigger).
 
     let newAchievements: AchievementView[] = [];
     if (markingDone) {
@@ -122,47 +113,6 @@ export class TasksService {
       },
       newAchievements,
     };
-  }
-
-  /**
-   * D5: reward the inviter (+3d Premium) only after the invitee completes
-   * their FIRST task. Guarded by `referralRewarded` so the bonus fires once.
-   */
-  private async maybeRewardInviter(userId: string): Promise<void> {
-    const u = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { referredById: true, referralRewarded: true },
-    });
-    if (!u || !u.referredById || u.referralRewarded) return;
-
-    const inviter = await this.prisma.user.findUnique({ where: { id: u.referredById } });
-    if (!inviter) {
-      // Inviter gone — mark rewarded so we don't keep checking.
-      await this.prisma.user.update({ where: { id: userId }, data: { referralRewarded: true } });
-      return;
-    }
-
-    const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z').getTime();
-    if (inviter.premiumUntil && inviter.premiumUntil.getTime() === ADMIN_SENTINEL) {
-      // Don't shorten admin's "infinite" premium.
-      await this.prisma.user.update({ where: { id: userId }, data: { referralRewarded: true } });
-      return;
-    }
-
-    const now = new Date();
-    const base = inviter.premiumUntil && inviter.premiumUntil > now ? inviter.premiumUntil : now;
-    const newUntil = new Date(base.getTime() + 3 * 24 * 60 * 60 * 1000);
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: inviter.id },
-        data: { isPremium: true, premiumUntil: newUntil },
-      }),
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { referralRewarded: true },
-      }),
-    ]);
   }
 
   /**

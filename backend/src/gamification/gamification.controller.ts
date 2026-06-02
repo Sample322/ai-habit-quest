@@ -170,9 +170,13 @@ export class GamificationController {
   }
 
   /**
-   * Resolve the caller's referral neighborhood: themselves + everyone they
-   * invited + their inviter + their inviter's other invitees. Bounded set,
-   * cheap to compute on every leaderboard read.
+   * Resolve the caller's *direct* referral relationships only:
+   *   • the caller themselves
+   *   • every user they invited (direct downline)
+   *   • their inviter (direct upline), if any
+   *
+   * Siblings (other invitees of the same inviter) are deliberately excluded —
+   * they aren't friends from the caller's perspective.
    */
   private async friendIds(userId: string): Promise<string[]> {
     const me = await this.prisma.user.findUniqueOrThrow({
@@ -185,14 +189,7 @@ export class GamificationController {
       select: { id: true },
     });
     for (const u of direct) ids.add(u.id);
-    if (me.referredById) {
-      ids.add(me.referredById);
-      const siblings = await this.prisma.user.findMany({
-        where: { referredById: me.referredById },
-        select: { id: true },
-      });
-      for (const u of siblings) ids.add(u.id);
-    }
+    if (me.referredById) ids.add(me.referredById);
     return Array.from(ids);
   }
 }
