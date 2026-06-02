@@ -8,7 +8,7 @@ import { TelegramStarsProvider } from './stars.provider';
 
 const TRIAL_PRICE_RUB = 1;
 const MONTH_PRICE_RUB = 299;
-const PREMIUM_STARS = 250; // tune in Phase 3
+const PREMIUM_STARS = 1; // smoke-test price; raise before public launch
 
 @Injectable()
 export class PaymentsService {
