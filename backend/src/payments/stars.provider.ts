@@ -38,15 +38,33 @@ export class TelegramStarsProvider {
       };
     }
 
-    const res = await axios.post(`https://api.telegram.org/bot${token}/createInvoiceLink`, {
-      title: invoice.title,
-      description: invoice.description,
-      payload: invoice.payload,
-      currency: 'XTR',
-      prices: [{ label: invoice.title, amount: invoice.stars }],
-    });
+    // Route through the Cloudflare Worker proxy when TELEGRAM_API_ROOT is set
+    // (same path grammy uses for the bot). Without this the RU backend can't
+    // reach api.telegram.org and the request times out indefinitely, hanging
+    // the Pay-with-Stars button on the client.
+    const apiRoot = (envString('TELEGRAM_API_ROOT', '') || 'https://api.telegram.org').replace(/\/+$/, '');
 
-    if (!res.data?.ok) throw new Error(`createInvoiceLink failed: ${JSON.stringify(res.data)}`);
+    let res;
+    try {
+      res = await axios.post(`${apiRoot}/bot${token}/createInvoiceLink`, {
+        title: invoice.title,
+        description: invoice.description,
+        payload: invoice.payload,
+        currency: 'XTR',
+        prices: [{ label: invoice.title, amount: invoice.stars }],
+      }, { timeout: 15_000 });
+    } catch (err) {
+      const e = err as { code?: string; message?: string; response?: { data?: unknown } };
+      this.logger.error(
+        `createInvoiceLink request failed: code=${e.code} msg=${e.message} body=${JSON.stringify(e.response?.data)}`,
+      );
+      throw new Error(`Telegram createInvoiceLink failed: ${e.message ?? 'request error'}`);
+    }
+
+    if (!res.data?.ok) {
+      this.logger.error(`createInvoiceLink !ok: ${JSON.stringify(res.data)}`);
+      throw new Error(`createInvoiceLink failed: ${JSON.stringify(res.data)}`);
+    }
     return { invoiceLink: res.data.result as string, payload: invoice.payload };
   }
 }

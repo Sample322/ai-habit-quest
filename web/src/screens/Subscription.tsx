@@ -103,6 +103,12 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
   async function payStars(): Promise<void> {
     setBusy('stars');
     setError(null);
+    // Hard 20s timeout — backend can stall if Telegram createInvoiceLink hangs,
+    // and we don't want the button frozen at "…" forever.
+    const timer = setTimeout(() => {
+      setBusy((b) => (b === 'stars' ? null : b));
+      setError(i.errors.generic);
+    }, 20_000);
     try {
       const { invoiceLink } = await api.starsInvoice();
       openInvoice(invoiceLink, async (status) => {
@@ -111,6 +117,7 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
     } catch (err) {
       setError(err instanceof Error ? err.message : i.errors.generic);
     } finally {
+      clearTimeout(timer);
       setBusy(null);
     }
   }
