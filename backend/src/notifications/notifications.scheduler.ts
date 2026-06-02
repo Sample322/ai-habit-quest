@@ -18,6 +18,7 @@ export class NotificationsScheduler {
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<void> {
     const users = await this.prisma.user.findMany({
+      where: { notifReminders: true },
       select: {
         id: true,
         telegramId: true,
@@ -103,6 +104,7 @@ export class NotificationsScheduler {
       where: {
         streakBrokenAt: { not: null },
         streakBrokenNotified: false,
+        notifStreakBreak: true,
       },
       select: {
         id: true,
@@ -148,6 +150,80 @@ export class NotificationsScheduler {
       });
     }
     if (sent > 0) this.logger.log(`Sent ${sent} streak-break nudges`);
+  }
+
+  /**
+   * T: weekly recap. Monday 09:00 UTC tick — for each opted-in user whose
+   * last recap was > 6 days ago, summarise the past 7 days (tasks done,
+   * XP earned, current streak, current rank). One DM per user per Monday.
+   */
+  @Cron('0 9 * * 1', { timeZone: 'UTC' })
+  async weeklyRecap(): Promise<void> {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const lastWeek = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        notifWeeklyRecap: true,
+        OR: [
+          { lastRecapAt: null },
+          { lastRecapAt: { lt: lastWeek } },
+        ],
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        languageCode: true,
+        streakCurrent: true,
+        xpTotal: true,
+      },
+    });
+
+    let sent = 0;
+    for (const u of users) {
+      const [tasksDone, weekXpAgg] = await Promise.all([
+        this.prisma.dailyTask.count({
+          where: { userId: u.id, doneAt: { gte: weekAgo } },
+        }),
+        this.prisma.dailyTask.aggregate({
+          where: { userId: u.id, doneAt: { gte: weekAgo } },
+          _sum: { xpAwarded: true },
+        }),
+      ]);
+      const weekXp = weekXpAgg._sum.xpAwarded ?? 0;
+      if (tasksDone === 0) {
+        // Skip users with no activity — would feel like a guilt-trip DM.
+        await this.prisma.user.update({ where: { id: u.id }, data: { lastRecapAt: now } });
+        continue;
+      }
+      const ahead = await this.prisma.user.count({ where: { xpTotal: { gt: u.xpTotal } } });
+      const rank = ahead + 1;
+
+      const isRu = u.languageCode !== 'en';
+      const msg = isRu
+        ? `📊 Итоги недели\n\n` +
+          `✅ Заданий выполнено: ${tasksDone}\n` +
+          `⚡ XP получено: +${weekXp}\n` +
+          `🔥 Серия: ${u.streakCurrent} дн.\n` +
+          `🏆 Место: #${rank}\n\n` +
+          `Хорошая неделя — продолжай в том же духе!`
+        : `📊 Weekly recap\n\n` +
+          `✅ Tasks done: ${tasksDone}\n` +
+          `⚡ XP earned: +${weekXp}\n` +
+          `🔥 Streak: ${u.streakCurrent} d\n` +
+          `🏆 Rank: #${rank}\n\n` +
+          `Solid week — keep it up!`;
+
+      try {
+        await this.bot.sendReminder(u.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`weekly recap failed for ${u.id}: ${(err as Error).message}`);
+      }
+      await this.prisma.user.update({ where: { id: u.id }, data: { lastRecapAt: now } });
+    }
+    if (sent > 0) this.logger.log(`Sent ${sent} weekly recaps`);
   }
 }
 

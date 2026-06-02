@@ -186,6 +186,24 @@ textarea:-webkit-autofill {
   }
 }
 
+/* Confetti piece: travels (dx, dy) with rotation and gravity-style settle. */
+@keyframes ahq-confetti {
+  0% {
+    transform: translate(-50%, -50%) translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform:
+      translate(-50%, -50%)
+      translate3d(var(--dx, 0px), calc(var(--dy, 0px) + 480px), 0)
+      rotate(var(--rot, 0deg));
+    opacity: 0;
+  }
+}
+
 /* Stagger child reveal — apply class to a list, children fade-rise in sequence. */
 .stagger > * {
   opacity: 0;

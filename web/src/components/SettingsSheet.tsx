@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, Bell, Globe, Clock, User as UserIcon, MapPin } from 'lucide-react';
+import { X, Bell, Globe, Clock, User as UserIcon, MapPin, BellRing } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -86,6 +86,24 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
       notify('error');
     } finally {
       setProfileBusy(false);
+    }
+  }
+
+  type NotifKey =
+    | 'notifReminders'
+    | 'notifAchievements'
+    | 'notifSeasons'
+    | 'notifStreakBreak'
+    | 'notifWeeklyRecap';
+
+  async function updateNotif(key: NotifKey, value: boolean): Promise<void> {
+    haptic('light');
+    try {
+      const updated = await api.updatePrefs({ [key]: value });
+      onUserChange(updated);
+      notify('success');
+    } catch {
+      notify('error');
     }
   }
 
@@ -209,6 +227,46 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
           </button>
         </section>
 
+        {/* Notification preferences */}
+        <section className="card p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center border border-hairlineStrong bg-bg/40">
+              <BellRing size={16} className="text-accent" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold leading-tight">{i.settings.notifications}</div>
+              <div className="text-[11px] text-muted mt-0.5">{i.settings.notificationsHint}</div>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <NotifToggle
+              label={i.settings.notifReminders}
+              value={user.notifications.reminders}
+              onChange={(v) => updateNotif('notifReminders', v)}
+            />
+            <NotifToggle
+              label={i.settings.notifAchievements}
+              value={user.notifications.achievements}
+              onChange={(v) => updateNotif('notifAchievements', v)}
+            />
+            <NotifToggle
+              label={i.settings.notifStreakBreak}
+              value={user.notifications.streakBreak}
+              onChange={(v) => updateNotif('notifStreakBreak', v)}
+            />
+            <NotifToggle
+              label={i.settings.notifWeeklyRecap}
+              value={user.notifications.weeklyRecap}
+              onChange={(v) => updateNotif('notifWeeklyRecap', v)}
+            />
+            <NotifToggle
+              label={i.settings.notifSeasons}
+              value={user.notifications.seasons}
+              onChange={(v) => updateNotif('notifSeasons', v)}
+            />
+          </div>
+        </section>
+
         {/* Language */}
         <section className="card p-4 space-y-3">
           <div className="flex items-center gap-3">
@@ -259,6 +317,31 @@ function TimePicker({
         </button>
       </div>
     </div>
+  );
+}
+
+function NotifToggle({
+  label, value, onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-3 py-2 px-3 rounded-card bg-bg/40 border border-hairline cursor-pointer hover:bg-bg/60 transition">
+      <span className="flex-1 text-sm font-medium text-text">{label}</span>
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative shrink-0 w-10 h-6 rounded-pill transition ${value ? 'bg-accent' : 'bg-white/10'}`}
+        aria-pressed={value}
+      >
+        <span
+          className="absolute top-0.5 w-5 h-5 rounded-pill bg-white shadow-card transition-all"
+          style={{ left: value ? '18px' : '2px' }}
+        />
+      </button>
+    </label>
   );
 }
 

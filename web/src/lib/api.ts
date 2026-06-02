@@ -1,6 +1,7 @@
 import type {
   DailyTask, Goal, Plan, ProgressOverview, User, GoalCategory,
-  AdminStats, AdminUser, AdminFeedback, Leaderboard, LeaderboardScope, Achievement, BonusTask,
+  AdminStats, AdminUser, AdminFeedback, AdminEvent,
+  Leaderboard, LeaderboardScope, Achievement, BonusTask,
   GoalInsights, LeaguesMe, SeasonView,
 } from './types';
 
@@ -63,6 +64,11 @@ export const api = {
     firstName: string;
     reminderHour: number;
     reminderMinute: number;
+    notifReminders: boolean;
+    notifAchievements: boolean;
+    notifSeasons: boolean;
+    notifStreakBreak: boolean;
+    notifWeeklyRecap: boolean;
   }>) =>
     request<User>('/me/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
 
@@ -145,6 +151,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify(opts) },
     ),
   adminFeedback: () => request<AdminFeedback[]>('/app-admin/feedback'),
+  adminEvents: () => request<AdminEvent[]>('/app-admin/events'),
 };
 
 export { ApiError };

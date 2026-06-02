@@ -15,6 +15,13 @@ export interface User {
   languageCode: 'ru' | 'en';
   timezone: string;
   reminder: { hour: number; minute: number };
+  notifications: {
+    reminders: boolean;
+    achievements: boolean;
+    seasons: boolean;
+    streakBreak: boolean;
+    weeklyRecap: boolean;
+  };
   isPremium: boolean;
   isAdmin: boolean;
   premiumUntil: string | null;
@@ -196,6 +203,15 @@ export interface AdminUser {
   xpTotal: number;
   level: number;
   createdAt: string;
+}
+
+export interface AdminEvent {
+  id: string;
+  kind: 'signup' | 'goal' | 'payment' | 'feedback';
+  at: string;
+  who: string;
+  label: string;
+  meta?: string;
 }
 
 export interface AdminFeedback {

@@ -24,6 +24,15 @@ class SetPremiumDto {
 
 const ADMIN_SENTINEL = new Date('2099-12-31T23:59:59Z');
 
+export interface AdminEvent {
+  id: string;
+  kind: 'signup' | 'goal' | 'payment' | 'feedback';
+  at: string;
+  who: string;
+  label: string;
+  meta?: string;
+}
+
 /**
  * In-app admin API — same data as the Basic-auth /admin/* endpoints, but
  * authorised via the user's JWT + admin Telegram ID, so the owner can manage
@@ -112,6 +121,87 @@ export class AppAdminController {
       data: { isPremium: body.isPremium, premiumUntil },
     });
     return { id: u.id, isPremium: u.isPremium, premiumUntil: u.premiumUntil };
+  }
+
+  /**
+   * X: events feed. Synthesises a recent-activity timeline from existing
+   * tables (signups, goal creates, payment events, feedback). No new schema —
+   * cheap to compute, latest 60 entries.
+   */
+  @Get('events')
+  async events() {
+    const limit = 30;
+    const [users, goals, payments, feedback] = await Promise.all([
+      this.prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: { id: true, firstName: true, username: true, createdAt: true, referredById: true },
+      }),
+      this.prisma.goal.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true, title: true, category: true, createdAt: true,
+          user: { select: { firstName: true, username: true } },
+        },
+      }),
+      this.prisma.paymentEvent.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true, status: true, provider: true, amountMinor: true, currency: true, createdAt: true,
+          user: { select: { firstName: true, username: true } },
+        },
+      }),
+      this.prisma.feedback.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true, message: true, createdAt: true,
+          user: { select: { firstName: true, username: true } },
+        },
+      }),
+    ]);
+
+    /* eslint-disable @typescript-eslint/no-unused-vars */
+    type Event = AdminEvent;
+    const whoOf = (u: { firstName: string | null; username: string | null } | null): string =>
+      u ? (u.firstName || u.username || 'anon') : 'anon';
+
+    const events: Event[] = [
+      ...users.map<Event>((u) => ({
+        id: 'u:' + u.id,
+        kind: 'signup',
+        at: u.createdAt.toISOString(),
+        who: u.firstName || u.username || 'anon',
+        label: u.referredById ? 'signed up (via referral)' : 'signed up',
+      })),
+      ...goals.map<Event>((g) => ({
+        id: 'g:' + g.id,
+        kind: 'goal',
+        at: g.createdAt.toISOString(),
+        who: whoOf(g.user),
+        label: `created goal "${g.title}"`,
+        meta: g.category,
+      })),
+      ...payments.map<Event>((p) => ({
+        id: 'p:' + p.id,
+        kind: 'payment',
+        at: p.createdAt.toISOString(),
+        who: whoOf(p.user),
+        label: `${p.status} · ${p.provider}`,
+        meta: `${(p.amountMinor / 100).toFixed(2)} ${p.currency}`,
+      })),
+      ...feedback.map<Event>((f) => ({
+        id: 'f:' + f.id,
+        kind: 'feedback',
+        at: f.createdAt.toISOString(),
+        who: whoOf(f.user),
+        label: f.message.slice(0, 80),
+      })),
+    ];
+    events.sort((a, b) => b.at.localeCompare(a.at));
+    return events.slice(0, 60);
   }
 
   @Get('feedback')

@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown, Infinity as InfinityIcon } from 'lucide-react';
+import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown, Infinity as InfinityIcon, Activity, UserPlus, Target, CreditCard } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
-import type { AdminStats, AdminUser, AdminFeedback } from '../lib/types';
+import type { AdminStats, AdminUser, AdminFeedback, AdminEvent } from '../lib/types';
 import { NumberTicker } from '../components/ui/NumberTicker';
 
-type AdminTab = 'stats' | 'users' | 'feedback';
+type AdminTab = 'stats' | 'users' | 'events' | 'feedback';
 
 export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
   const [tab, setTab] = useState<AdminTab>('stats');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [feedback, setFeedback] = useState<AdminFeedback[] | null>(null);
+  const [events, setEvents] = useState<AdminEvent[] | null>(null);
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +27,16 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
   const loadFeedback = useCallback(async () => {
     try { setFeedback(await api.adminFeedback()); } catch (e) { setError(msg(e)); }
   }, []);
+  const loadEvents = useCallback(async () => {
+    try { setEvents(await api.adminEvents()); } catch (e) { setError(msg(e)); }
+  }, []);
 
-  useEffect(() => { void loadStats(); void loadUsers(); void loadFeedback(); }, [loadStats, loadUsers, loadFeedback]);
+  useEffect(() => {
+    void loadStats();
+    void loadUsers();
+    void loadFeedback();
+    void loadEvents();
+  }, [loadStats, loadUsers, loadFeedback, loadEvents]);
 
   async function grantPremium(
     u: AdminUser,
@@ -70,15 +79,18 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
           </button>
         </header>
 
-        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-pill bg-elevated border border-hairline mb-4">
+        <div className="grid grid-cols-4 gap-1.5 p-1 rounded-pill bg-elevated border border-hairline mb-4">
           <TabButton active={tab === 'stats'} onClick={() => { haptic('light'); setTab('stats'); }}>
-            <BarChart3 size={14} /> Stats
+            <BarChart3 size={13} /> Stats
           </TabButton>
           <TabButton active={tab === 'users'} onClick={() => { haptic('light'); setTab('users'); }}>
-            <UsersIcon size={14} /> Users
+            <UsersIcon size={13} /> Users
+          </TabButton>
+          <TabButton active={tab === 'events'} onClick={() => { haptic('light'); setTab('events'); }}>
+            <Activity size={13} /> Events
           </TabButton>
           <TabButton active={tab === 'feedback'} onClick={() => { haptic('light'); setTab('feedback'); }}>
-            <MessageSquare size={14} /> Feedback
+            <MessageSquare size={13} /> Feedback
           </TabButton>
         </div>
 
@@ -99,6 +111,7 @@ export function Admin({ onClose }: { onClose: () => void }): JSX.Element {
             busyId={busyId}
           />
         )}
+        {tab === 'events' && <EventsView events={events} />}
         {tab === 'feedback' && <FeedbackView feedback={feedback} />}
       </div>
     </div>
@@ -330,6 +343,43 @@ function MenuChip({
     >
       {children}
     </button>
+  );
+}
+
+function EventsView({ events }: { events: AdminEvent[] | null }): JSX.Element {
+  if (!events) return <SkeletonRows />;
+  if (events.length === 0) return <EmptyState title="Тихо" subtitle="Активности пока нет." />;
+
+  const iconFor = (kind: AdminEvent['kind']) => {
+    switch (kind) {
+      case 'signup': return <UserPlus size={14} className="text-accent" />;
+      case 'goal': return <Target size={14} className="text-warning" />;
+      case 'payment': return <CreditCard size={14} className="text-positive" />;
+      case 'feedback': return <MessageSquare size={14} className="text-muted" />;
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 stagger">
+      {events.map((e) => (
+        <div key={e.id} className="card p-3 flex items-start gap-3">
+          <span className="shrink-0 w-7 h-7 rounded-pill grid place-items-center border border-hairline bg-bg/40">
+            {iconFor(e.kind)}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">
+              <span className="text-text">{e.who}</span>
+              <span className="text-muted"> · </span>
+              <span className="text-muted">{e.label}</span>
+              {e.meta && <span className="text-[10px] text-accent ml-2 tabular">{e.meta}</span>}
+            </div>
+            <div className="text-[10px] text-muted/70 mt-0.5 tabular">
+              {new Date(e.at).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

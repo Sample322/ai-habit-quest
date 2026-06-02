@@ -59,6 +59,13 @@ export class UsersService {
       languageCode: u.languageCode,
       timezone: u.timezone,
       reminder: { hour: u.reminderHour, minute: u.reminderMinute },
+      notifications: {
+        reminders: u.notifReminders,
+        achievements: u.notifAchievements,
+        seasons: u.notifSeasons,
+        streakBreak: u.notifStreakBreak,
+        weeklyRecap: u.notifWeeklyRecap,
+      },
       isPremium: u.isPremium,
       isAdmin: isAdminTelegramId(u.telegramId),
       premiumUntil: u.premiumUntil,
@@ -84,6 +91,11 @@ export class UsersService {
       firstName?: string;
       reminderHour?: number;
       reminderMinute?: number;
+      notifReminders?: boolean;
+      notifAchievements?: boolean;
+      notifSeasons?: boolean;
+      notifStreakBreak?: boolean;
+      notifWeeklyRecap?: boolean;
     },
   ) {
     const data: Record<string, unknown> = {};
@@ -95,6 +107,11 @@ export class UsersService {
     }
     if (prefs.reminderHour !== undefined) data['reminderHour'] = clamp(prefs.reminderHour, 0, 23);
     if (prefs.reminderMinute !== undefined) data['reminderMinute'] = clamp(prefs.reminderMinute, 0, 59);
+    if (prefs.notifReminders !== undefined) data['notifReminders'] = !!prefs.notifReminders;
+    if (prefs.notifAchievements !== undefined) data['notifAchievements'] = !!prefs.notifAchievements;
+    if (prefs.notifSeasons !== undefined) data['notifSeasons'] = !!prefs.notifSeasons;
+    if (prefs.notifStreakBreak !== undefined) data['notifStreakBreak'] = !!prefs.notifStreakBreak;
+    if (prefs.notifWeeklyRecap !== undefined) data['notifWeeklyRecap'] = !!prefs.notifWeeklyRecap;
     await this.prisma.user.update({ where: { id }, data });
     return this.getProfile(id);
   }

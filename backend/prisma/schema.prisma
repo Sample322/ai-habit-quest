@@ -56,6 +56,15 @@ model User {
   timezone      String   @default("Europe/Moscow")
   reminderHour  Int      @default(9)
   reminderMinute Int     @default(0)
+  // U: per-channel notification preferences. All default-on so legacy users
+  // keep current behaviour; UI lets them mute individual streams.
+  notifReminders     Boolean @default(true)
+  notifAchievements  Boolean @default(true)
+  notifSeasons       Boolean @default(true)
+  notifStreakBreak   Boolean @default(true)
+  notifWeeklyRecap   Boolean @default(true)
+  // T: weekly recap tracking — last Monday a recap DM was sent (avoid double).
+  lastRecapAt        DateTime?
   isPremium     Boolean  @default(false)
   premiumUntil  DateTime?
   streakCurrent Int      @default(0)

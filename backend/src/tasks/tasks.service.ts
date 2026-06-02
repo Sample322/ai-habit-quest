@@ -98,8 +98,11 @@ export class TasksService {
       if (newAchievements.length > 0) {
         await this.persistEarnedBadges(userId, newAchievements);
         // M: DM the user about each newly-earned achievement. Fire-and-forget
-        // so a bot hiccup doesn't break the toggle response.
-        void this.sendAchievementDM(user.telegramId, lang, newAchievements);
+        // so a bot hiccup doesn't break the toggle response. Respects the
+        // notifAchievements preference (U).
+        if (user.notifAchievements) {
+          void this.sendAchievementDM(user.telegramId, lang, newAchievements);
+        }
       }
     }
 

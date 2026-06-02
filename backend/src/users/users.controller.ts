@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -11,6 +11,11 @@ class UpdatePreferencesDto {
   @IsOptional() @IsString() firstName?: string;
   @IsOptional() @IsInt() @Min(0) @Max(23) reminderHour?: number;
   @IsOptional() @IsInt() @Min(0) @Max(59) reminderMinute?: number;
+  @IsOptional() @IsBoolean() notifReminders?: boolean;
+  @IsOptional() @IsBoolean() notifAchievements?: boolean;
+  @IsOptional() @IsBoolean() notifSeasons?: boolean;
+  @IsOptional() @IsBoolean() notifStreakBreak?: boolean;
+  @IsOptional() @IsBoolean() notifWeeklyRecap?: boolean;
 }
 
 @UseGuards(JwtAuthGuard)

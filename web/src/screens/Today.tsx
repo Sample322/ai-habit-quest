@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check } from 'lucide-react';
 
 import { api } from '../lib/api';
@@ -9,6 +9,7 @@ import { ReferralCard } from '../components/ReferralCard';
 import { GoalInsightsModal } from '../components/GoalInsightsModal';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
+import { Confetti } from '../components/ui/Confetti';
 
 interface TodayProps {
   lang: Lang;
@@ -50,6 +51,9 @@ export function Today({
   const [bonusBusy, setBonusBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [insightsGoalId, setInsightsGoalId] = useState<string | null>(null);
+  const [confetti, setConfetti] = useState(false);
+  // Avoid re-firing confetti on every render when overall already at 100%.
+  const lastCelebrationKey = useRef<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const list = await api.todayTasks();
@@ -134,6 +138,21 @@ export function Today({
   const groups: GoalGroup[] = useMemo(() => groupByGoal(tasks ?? []), [tasks]);
   const overall = useMemo(() => computeOverall(groups), [groups]);
 
+  // Celebrate once when the user closes the day. Keyed by local date so a
+  // re-render at 100% the next day fires again, but a re-render the same
+  // day does not.
+  useEffect(() => {
+    if (overall.total === 0 || overall.done < overall.total) return;
+    const key = (tasks ?? [])[0]?.localDate ?? new Date().toISOString().slice(0, 10);
+    if (lastCelebrationKey.current === key) return;
+    lastCelebrationKey.current = key;
+    setConfetti(true);
+    notify('success');
+    showToast(lang === 'en' ? '🎉 Day completed!' : '🎉 День закрыт!');
+    const off = setTimeout(() => setConfetti(false), 2600);
+    return () => clearTimeout(off);
+  }, [overall.done, overall.total, tasks, lang]);
+
   const hasTasks = tasks !== null && tasks.length > 0;
   const isLoading = tasks === null;
 
@@ -155,7 +174,16 @@ export function Today({
       {isLoading && <SkeletonGoals />}
 
       {!isLoading && !hasTasks && (
-        <div className="surface text-muted text-sm">{i.today.empty}</div>
+        <section className="card aurora p-8 text-center space-y-3 animate-rise">
+          <div className="mx-auto w-14 h-14 rounded-pill grid place-items-center bg-accentGrad shadow-glow">
+            <Sparkles size={22} className="text-white" />
+          </div>
+          <div className="text-base font-semibold">{i.today.empty}</div>
+          <button onClick={onAddGoal} className="btn-primary mt-2">
+            <Plus size={14} className="inline mr-1 -mt-0.5" />
+            {i.today.addGoal}
+          </button>
+        </section>
       )}
 
       {hasTasks && (
@@ -214,6 +242,8 @@ export function Today({
           </div>
         </div>
       )}
+
+      <Confetti active={confetti} />
     </div>
   );
 }

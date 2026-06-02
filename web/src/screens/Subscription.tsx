@@ -161,7 +161,14 @@ function UpgradeSubscription({ lang, i, onClose, onActivated }: UpgradeSubscript
 }
 
 function BenefitList({ i }: { i: ReturnType<typeof t> }) {
-  const items = [i.subscription.benefit1, i.subscription.benefit2, i.subscription.benefit3, i.subscription.benefit4];
+  const items = [
+    i.subscription.benefit1,
+    i.subscription.benefit2,
+    i.subscription.benefit3,
+    i.subscription.benefit4,
+    i.subscription.benefit5,
+    i.subscription.benefit6,
+  ];
   return (
     <ul className="space-y-1.5">
       {items.map((b) => (
@@ -169,7 +176,7 @@ function BenefitList({ i }: { i: ReturnType<typeof t> }) {
           <span className="shrink-0 w-6 h-6 rounded-pill grid place-items-center bg-positive/15">
             <Check size={13} strokeWidth={3} className="text-positive" />
           </span>
-          <span className="text-sm font-medium">{b}</span>
+          <span className="text-sm font-medium leading-snug">{b}</span>
         </li>
       ))}
     </ul>
