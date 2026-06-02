@@ -83,6 +83,8 @@ const config: Config = {
       animation: {
         'fade-in': 'fadeIn 320ms cubic-bezier(0.16,1,0.3,1) both',
         'rise': 'rise 480ms cubic-bezier(0.16,1,0.3,1) both',
+        'slide-right': 'slideFromRight 360ms cubic-bezier(0.16,1,0.3,1) both',
+        'slide-left': 'slideFromLeft 360ms cubic-bezier(0.16,1,0.3,1) both',
         'pulse-glow': 'pulseGlow 2.4s ease-in-out infinite',
         'shine': 'shine 2.4s linear infinite',
         'pop': 'pop 360ms cubic-bezier(0.34,1.56,0.64,1) both',
@@ -92,6 +94,14 @@ const config: Config = {
         fadeIn: {
           from: { opacity: '0', transform: 'translateY(6px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideFromRight: {
+          '0%': { opacity: '0', transform: 'translateX(28px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        slideFromLeft: {
+          '0%': { opacity: '0', transform: 'translateX(-28px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
         },
         rise: {
           from: { opacity: '0', transform: 'translateY(16px)' },
