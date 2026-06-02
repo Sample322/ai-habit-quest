@@ -9,7 +9,11 @@ const BOT_USERNAME = import.meta.env.VITE_TG_BOT_USERNAME || 'AI_Habit_Tracking_
 
 export function ReferralCard({ lang, user }: { lang: Lang; user: User }): JSX.Element {
   const i = t(lang);
-  const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
+  // ?start= (not ?startapp=) — sends invitees into the bot chat first so they
+  // see the welcome message + onboarding button. The bot's /start handler
+  // forwards the ref_<code> payload into the Mini App via startapp, so the
+  // existing auth.applyReferral flow still picks it up.
+  const link = `https://t.me/${BOT_USERNAME}?start=ref_${user.referralCode}`;
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {

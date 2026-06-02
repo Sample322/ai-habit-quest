@@ -33,13 +33,40 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
 
     this.bot.command('start', async (ctx) => {
       const botUsername = envString('TELEGRAM_BOT_USERNAME', '');
-      const buttonUrl = botUsername ? `https://t.me/${botUsername}?startapp=start` : undefined;
       const isRu = ctx.from?.language_code?.startsWith('ru');
-      const kb = buttonUrl
-        ? new InlineKeyboard().url(isRu ? 'Открыть AI Habit Quest' : 'Open AI Habit Quest', buttonUrl)
+
+      // /start payload — set when user follows a deep link like
+      // t.me/<bot>?start=ref_<code>. We forward that payload to the Mini App
+      // via startapp so auth.service applyReferral() can link the inviter.
+      const payload = ctx.match?.toString().trim() ?? '';
+      const isReferral = payload.startsWith('ref_');
+      const startapp = isReferral ? payload : 'start';
+
+      const buttonUrl = botUsername
+        ? `https://t.me/${botUsername}?startapp=${encodeURIComponent(startapp)}`
         : undefined;
-      await ctx.reply(
-        isRu
+      const kb = buttonUrl
+        ? new InlineKeyboard().url(
+            isRu ? '🚀 Открыть AI Habit Quest' : '🚀 Open AI Habit Quest',
+            buttonUrl,
+          )
+        : undefined;
+
+      const text = isReferral
+        ? isRu
+          ? '🎁 <b>Тебя пригласили в AI Habit Quest!</b>\n\n' +
+            'Создай свою первую цель и получи <b>+3 дня Premium в подарок</b>.\n\n' +
+            '• AI собирает 30-дневный план привычек\n' +
+            '• Серии, XP, лиги, сезонные награды\n' +
+            '• Восстановление streak, расширенная аналитика\n\n' +
+            'Жми кнопку ниже — приглашение применится автоматически.'
+          : '🎁 <b>You\'ve been invited to AI Habit Quest!</b>\n\n' +
+            'Create your first goal and get <b>+3 days of Premium</b> as a welcome gift.\n\n' +
+            '• AI builds a 30-day habit plan\n' +
+            '• Streaks, XP, leagues, season rewards\n' +
+            '• Streak freeze, advanced stats\n\n' +
+            'Tap the button — the invite applies automatically.'
+        : isRu
           ? '👋 Привет! Это <b>AI Habit Quest</b> — твой геймифицированный напарник по привычкам.\n\n' +
             '• Выбираешь цель — спорт, учёба, дисциплина или своя.\n' +
             '• Получаешь 7-дневный план из маленьких шагов.\n' +
@@ -49,9 +76,9 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
             '• Pick a goal: sport, study, discipline, or custom.\n' +
             '• Get a 7-day plan of small steps.\n' +
             '• Tick them off — earn XP, keep your streak.\n\n' +
-            'Tap the button below to start.',
-        { reply_markup: kb, parse_mode: 'HTML' },
-      );
+            'Tap the button below to start.';
+
+      await ctx.reply(text, { reply_markup: kb, parse_mode: 'HTML' });
     });
 
     this.bot.command('help', async (ctx) => {
