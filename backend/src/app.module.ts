@@ -19,6 +19,7 @@ import { BotModule } from './bot/bot.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
 import { BonusModule } from './bonus/bonus.module';
+import { ShareModule } from './share/share.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { BonusModule } from './bonus/bonus.module';
     PaymentsModule,
     AdminModule,
     BonusModule,
+    ShareModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

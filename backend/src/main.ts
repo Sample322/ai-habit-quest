@@ -1,10 +1,18 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
+
+  // Share endpoint accepts base64-encoded PNGs (capped at ~800kB after
+  // decode in the controller). Lift the default 100kB body limit so the
+  // upload doesn't trip PayloadTooLarge before validation runs.
+  app.use(json({ limit: '1500kb' }));
+  app.use(urlencoded({ limit: '1500kb', extended: true }));
 
   // Behind Timeweb's Caddy reverse proxy: trust the first hop so `req.ip`
   // resolves to the real client (via X-Forwarded-For) — required for per-client

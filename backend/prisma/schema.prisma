@@ -335,6 +335,18 @@ model SeasonResult {
   @@index([seasonId, finalRank])
 }
 
+// AA-2: temporary public hosting for share progress PNGs so Telegram's
+// shareToStory has something to pull from. Cleaned up by cron after 24h.
+model ShareImage {
+  id        String   @id @default(cuid())
+  userId    String?
+  data      Bytes
+  mime      String   @default("image/png")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model PlanCache {
   id          String   @id @default(cuid())
   cacheKey    String   @unique // hash of category|level|horizonDays|provider

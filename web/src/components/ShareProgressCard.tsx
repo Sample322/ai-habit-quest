@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Download, Share2 } from 'lucide-react';
+import { X, Download, Sparkles, Send } from 'lucide-react';
 
-import { haptic, notify, shareUrl } from '../lib/telegram';
+import { api } from '../lib/api';
+import { canShareToStory, haptic, notify, shareToStory, shareUrl } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { User } from '../lib/types';
 
@@ -15,14 +16,18 @@ interface Props {
 const BOT_USERNAME = import.meta.env.VITE_TG_BOT_USERNAME || 'AI_Habit_Tracking_bot';
 
 /**
- * Render a sharable PNG card with rank / streak / XP. Drawn into an offscreen
- * <canvas> so we can both display it as preview and offer a Download button
- * (works on iOS + Android Telegram WebView via a data URL anchor).
+ * Render a sharable PNG card with rank / streak / XP. The canvas is drawn
+ * once, then exposed via download (local PNG), share-to-story (upload to
+ * backend → tg.shareToStory) and share-to-chat (native share with the file
+ * if supported, falling back to text + referral link).
  */
 export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
   const i = t(lang);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'story' | 'chat' | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const storySupported = canShareToStory();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,6 +35,11 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     drawCard(canvas, { lang, user, rankName });
     setDataUrl(canvas.toDataURL('image/png'));
   }, [lang, user, rankName]);
+
+  function showInfo(msg: string): void {
+    setInfo(msg);
+    setTimeout(() => setInfo(null), 3000);
+  }
 
   function download(): void {
     if (!dataUrl) return;
@@ -43,22 +53,78 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     notify('success');
   }
 
-  function shareText(): void {
+  async function uploadDataUrl(): Promise<string | null> {
+    if (!dataUrl) return null;
+    try {
+      const { url } = await api.uploadShare(dataUrl);
+      return url;
+    } catch {
+      notify('error');
+      return null;
+    }
+  }
+
+  async function story(): Promise<void> {
+    if (!dataUrl || busy) return;
+    if (!storySupported) { showInfo(i.share.noStorySupport); return; }
+    setBusy('story');
     haptic('light');
-    const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
-    const text = lang === 'en'
-      ? `🏆 ${rankName} · 🔥 ${user.streak.current}d streak · ⚡ ${user.xpTotal} XP in AI Habit Quest`
-      : `🏆 ${rankName} · 🔥 серия ${user.streak.current}д · ⚡ ${user.xpTotal} XP в AI Habit Quest`;
-    shareUrl(link, text);
+    try {
+      const url = await uploadDataUrl();
+      if (!url) return;
+      const link = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
+      const ok = shareToStory(url, i.share.storyText, link);
+      if (!ok) { showInfo(i.share.noStorySupport); return; }
+      notify('success');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function chat(): Promise<void> {
+    if (!dataUrl || busy) return;
+    setBusy('chat');
+    haptic('light');
+    try {
+      // Try Web Share API with the actual PNG file first — works in
+      // modern WebViews + iOS Telegram; picks the chat picker with the image.
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `ahq-progress.png`, { type: 'image/png' });
+      const navWithShare = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; text?: string }) => Promise<void>;
+      };
+      if (navWithShare.canShare?.({ files: [file] }) && navWithShare.share) {
+        await navWithShare.share({
+          files: [file],
+          text: `${rankName} · ${user.streak.current}🔥 · ${user.xpTotal} XP — AI Habit Quest`,
+        });
+        notify('success');
+        return;
+      }
+      // Fallback: upload + open Telegram's "share image URL" sheet.
+      const url = await uploadDataUrl();
+      if (!url) return;
+      const text = lang === 'en'
+        ? `🏆 ${rankName} · 🔥 ${user.streak.current}d · ⚡ ${user.xpTotal} XP\n${url}`
+        : `🏆 ${rankName} · 🔥 ${user.streak.current}д · ⚡ ${user.xpTotal} XP\n${url}`;
+      const ref = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
+      shareUrl(ref, text);
+      notify('success');
+    } catch {
+      notify('error');
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="bg-bg rounded-card border border-hairline shadow-card w-full max-w-md p-5 space-y-4"
+        className="bg-bg rounded-card border border-hairline shadow-card w-full max-w-md p-5 space-y-4 max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -72,25 +138,62 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
           </button>
         </div>
 
-        {/* Preview — visually scaled to fit modal; PNG saved is full 1080×1350 */}
         <div className="rounded-card overflow-hidden border border-hairline">
           <canvas ref={canvasRef} width={1080} height={1350} className="w-full h-auto block" />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={download} className="btn-ghost flex items-center justify-center gap-1.5">
-            <Download size={14} />
-            {i.share.download}
-          </button>
-          <button onClick={shareText} className="btn-primary flex items-center justify-center gap-1.5">
-            <Share2 size={14} />
-            {i.share.shareTo}
-          </button>
+        {/* Uniform 3-button row */}
+        <div className="grid grid-cols-3 gap-2">
+          <ActionBtn
+            onClick={download}
+            disabled={!dataUrl}
+            icon={<Download size={16} />}
+            label={i.share.download}
+            variant="ghost"
+          />
+          <ActionBtn
+            onClick={chat}
+            disabled={!dataUrl || busy !== null}
+            icon={<Send size={16} />}
+            label={busy === 'chat' ? '…' : i.share.shareToChat}
+            variant="ghost"
+          />
+          <ActionBtn
+            onClick={story}
+            disabled={!dataUrl || busy !== null || !storySupported}
+            icon={<Sparkles size={16} />}
+            label={busy === 'story' ? '…' : i.share.shareToStory}
+            variant="primary"
+          />
         </div>
-
+        {info && <div className="text-[11px] text-muted text-center">{info}</div>}
         <div className="text-[11px] text-muted leading-relaxed text-center">{i.share.hint}</div>
       </div>
     </div>
+  );
+}
+
+function ActionBtn({
+  onClick, disabled, icon, label, variant,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  label: string;
+  variant: 'primary' | 'ghost';
+}) {
+  const base = 'h-14 rounded-card flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 px-2';
+  const cls = variant === 'primary'
+    ? `${base} text-white shadow-glow`
+    : `${base} text-text border border-hairlineStrong bg-white/[0.02] hover:bg-white/[0.05]`;
+  const style = variant === 'primary'
+    ? { backgroundImage: 'linear-gradient(135deg,#7c5cff 0%,#9b7dff 60%,#c4a6ff 100%)' }
+    : undefined;
+  return (
+    <button onClick={onClick} disabled={disabled} className={cls} style={style}>
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -103,7 +206,6 @@ function drawCard(
   const W = canvas.width;
   const H = canvas.height;
 
-  // Background — onyx gradient + glow blobs (matches app palette)
   const bg = ctx.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, '#11131a');
   bg.addColorStop(0.5, '#0c0d12');
@@ -111,14 +213,12 @@ function drawCard(
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Violet blob top-left
   const g1 = ctx.createRadialGradient(W * 0.2, H * 0.15, 0, W * 0.2, H * 0.15, W * 0.5);
   g1.addColorStop(0, 'rgba(124,92,255,0.45)');
   g1.addColorStop(1, 'rgba(124,92,255,0)');
   ctx.fillStyle = g1;
   ctx.fillRect(0, 0, W, H);
 
-  // Emerald blob bottom-right
   const g2 = ctx.createRadialGradient(W * 0.85, H * 0.85, 0, W * 0.85, H * 0.85, W * 0.6);
   g2.addColorStop(0, 'rgba(25,213,122,0.30)');
   g2.addColorStop(1, 'rgba(25,213,122,0)');
@@ -128,18 +228,14 @@ function drawCard(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // App eyebrow
   ctx.fillStyle = '#7c5cff';
   ctx.font = '700 32px Manrope, sans-serif';
-  ctx.letterSpacing = '0.2em';
   ctx.fillText('AI HABIT QUEST', W / 2, 110);
 
-  // Username
   ctx.fillStyle = '#f5f7fb';
   ctx.font = '600 48px Manrope, sans-serif';
   ctx.fillText(user.firstName || user.username || '·', W / 2, 200);
 
-  // Rank — big shimmer text
   const rankGrad = ctx.createLinearGradient(0, 0, W, 0);
   rankGrad.addColorStop(0, '#f5f7fb');
   rankGrad.addColorStop(0.5, '#c4a6ff');
@@ -148,18 +244,15 @@ function drawCard(
   ctx.font = '800 120px Manrope, sans-serif';
   ctx.fillText(rankName, W / 2, 360);
 
-  // Level chip
   ctx.fillStyle = '#7c5cff';
   ctx.font = '600 36px Manrope, sans-serif';
   ctx.fillText(`${lang === 'en' ? 'Level' : 'Уровень'} ${user.level}`, W / 2, 440);
 
-  // Big HUD stats — 3 columns
   const yStat = 700;
   drawStat(ctx, W * 0.18, yStat, '🔥', String(user.streak.current), lang === 'en' ? 'STREAK' : 'СЕРИЯ');
   drawStat(ctx, W * 0.50, yStat, '⚡', String(user.xpTotal), 'XP');
   drawStat(ctx, W * 0.82, yStat, '🏆', String(user.streak.best), lang === 'en' ? 'BEST' : 'РЕКОРД');
 
-  // Bottom CTA
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.font = '500 28px Manrope, sans-serif';
   ctx.fillText(
@@ -168,7 +261,6 @@ function drawCard(
     H - 120,
   );
 
-  // Footer accent line
   ctx.strokeStyle = '#7c5cff';
   ctx.lineWidth = 4;
   ctx.beginPath();

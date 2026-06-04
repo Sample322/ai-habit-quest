@@ -29,6 +29,13 @@ interface TelegramWebApp {
   openLink: (url: string) => void;
   openTelegramLink: (url: string) => void;
   openInvoice: (url: string, callback?: (status: string) => void) => void;
+  /** TG WebApp ≥ 7.8: open the Stories editor with the given media URL. */
+  shareToStory?: (
+    mediaUrl: string,
+    params?: { text?: string; widget_link?: { url: string; name?: string } },
+  ) => void;
+  /** Approximate WebApp API version: '7.8', '8.0', etc. */
+  version?: string;
   MainButton: {
     setText: (text: string) => void;
     show: () => void;
@@ -91,6 +98,29 @@ export function openInvoice(url: string, cb?: (status: string) => void): void {
   const tg = getWebApp();
   if (tg && tg.openInvoice) tg.openInvoice(url, cb);
   else window.open(url, '_blank', 'noopener');
+}
+
+/**
+ * Check whether the Telegram WebApp supports the Stories share method.
+ * Older clients don't ship it so we have to fall back gracefully.
+ */
+export function canShareToStory(): boolean {
+  const tg = getWebApp();
+  if (!tg || typeof tg.shareToStory !== 'function') return false;
+  const v = tg.version ?? '6.0';
+  const [major, minor] = v.split('.').map(Number);
+  return major > 7 || (major === 7 && minor >= 8);
+}
+
+/** TG ≥ 7.8: open the Stories editor with a public image URL pre-loaded. */
+export function shareToStory(mediaUrl: string, text?: string, widgetUrl?: string): boolean {
+  const tg = getWebApp();
+  if (!canShareToStory() || !tg?.shareToStory) return false;
+  tg.shareToStory(mediaUrl, {
+    text,
+    widget_link: widgetUrl ? { url: widgetUrl, name: 'AI Habit Quest' } : undefined,
+  });
+  return true;
 }
 
 /** Open Telegram's native share sheet for a link (used for referrals). */

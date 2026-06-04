@@ -173,6 +173,12 @@ export const api = {
   cardInvoice: () =>
     request<{ invoiceLink: string; payload: string }>('/payments/card/invoice', { method: 'POST' }),
 
+  uploadShare: (dataUrl: string) =>
+    request<{ id: string; url: string }>('/share/progress', {
+      method: 'POST',
+      body: JSON.stringify({ dataUrl }),
+    }),
+
   // --- In-app admin (only works for admin Telegram IDs) ---
   adminStats: () => request<AdminStats>('/app-admin/stats'),
   adminUsers: (q?: string) =>

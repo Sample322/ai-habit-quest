@@ -47,9 +47,13 @@ const dict = {
     share: {
       action: 'Поделиться прогрессом',
       title: 'Твой прогресс',
-      download: 'Скачать PNG',
-      shareTo: 'Поделиться в TG',
-      hint: 'Скачай картинку или поделись текстом + рефералкой',
+      download: 'Скачать',
+      shareToStory: 'В сторис',
+      shareToChat: 'В чат',
+      hint: 'Картинка автоматически попадёт в сторис или личку.',
+      uploading: 'Готовлю картинку…',
+      storyText: 'Мой прогресс в AI Habit Quest',
+      noStorySupport: 'Сторис не поддерживаются — обнови Telegram.',
     },
     bonus: {
       title: 'Бонус от ИИ',
@@ -299,9 +303,13 @@ const dict = {
     share: {
       action: 'Share progress',
       title: 'Your progress',
-      download: 'Download PNG',
-      shareTo: 'Share to TG',
-      hint: 'Download the image or share text + your referral link',
+      download: 'Download',
+      shareToStory: 'Story',
+      shareToChat: 'Chat',
+      hint: 'Image goes straight to a story or DM.',
+      uploading: 'Preparing image…',
+      storyText: 'My progress on AI Habit Quest',
+      noStorySupport: 'Stories unsupported — update Telegram.',
     },
     bonus: {
       title: 'AI bonus',
