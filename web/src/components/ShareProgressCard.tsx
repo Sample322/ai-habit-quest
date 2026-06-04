@@ -33,7 +33,10 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     drawCard(canvas, { lang, user, rankName });
-    setDataUrl(canvas.toDataURL('image/png'));
+    // JPEG at quality 0.9 — Stories don't need transparency, and a JPEG of
+    // this card is ~10× smaller than a PNG of the same gradients, which
+    // keeps the upload safely below the backend's 1.8MB cap.
+    setDataUrl(canvas.toDataURL('image/jpeg', 0.9));
   }, [lang, user, rankName]);
 
   function showInfo(msg: string): void {
@@ -46,7 +49,7 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     haptic('light');
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `ahq-progress-${Date.now()}.png`;
+    a.download = `ahq-progress-${Date.now()}.jpg`;
     document.body.appendChild(a);
     a.click();
     a.remove();
