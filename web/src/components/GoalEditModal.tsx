@@ -138,17 +138,23 @@ export function GoalEditModal({ lang, goal, onClose, onChanged }: Props) {
               <div className="text-xs text-muted text-center py-2">{i.goalEdit.empty}</div>
             )}
             {habits.map((h) => (
-              <div key={h.id} className="rounded-card border border-hairline bg-bg/40 px-3 py-2.5 flex items-center gap-2">
-                <span className="flex-1 text-sm">{h.title}</span>
-                <button
-                  onClick={() => removeHabit(h.id)}
-                  disabled={busy === h.id}
-                  aria-label="Remove"
-                  className="w-7 h-7 grid place-items-center rounded-pill text-muted hover:text-danger hover:bg-danger/10 transition disabled:opacity-40"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
+              <HabitRow
+                key={h.id}
+                habit={h}
+                busy={busy === h.id}
+                onRemove={() => removeHabit(h.id)}
+                onPatch={async (patch) => {
+                  try {
+                    const updated = await api.updateHabit(h.id, patch);
+                    setHabits((prev) => prev.map((x) => (x.id === h.id ? { ...x, ...updated } : x)));
+                    notify('success');
+                  } catch (e) {
+                    notify('error');
+                    setErr(e instanceof Error ? e.message : i.errors.generic);
+                  }
+                }}
+                lang={lang}
+              />
             ))}
           </div>
 
@@ -175,6 +181,135 @@ export function GoalEditModal({ lang, goal, onClose, onChanged }: Props) {
 
         {err && <div className="text-xs text-danger break-words">{err}</div>}
       </div>
+    </div>
+  );
+}
+
+const DAY_LABELS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const DAY_LABELS_EN = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+function HabitRow({
+  habit, busy, onRemove, onPatch, lang,
+}: {
+  habit: Habit;
+  busy: boolean;
+  onRemove: () => void;
+  onPatch: (patch: Partial<Pick<Habit, 'scheduleMask' | 'reminderEnabled' | 'reminderHour' | 'reminderMinute'>>) => Promise<void>;
+  lang: Lang;
+}) {
+  const i = t(lang);
+  const [expanded, setExpanded] = useState(false);
+  const labels = lang === 'en' ? DAY_LABELS_EN : DAY_LABELS_RU;
+  const mask = habit.scheduleMask ?? 127;
+  const reminderOn = !!habit.reminderEnabled;
+  const hh = habit.reminderHour ?? 9;
+  const mm = habit.reminderMinute ?? 0;
+
+  function toggleDay(idx: number): void {
+    const bit = 1 << idx;
+    const next = mask ^ bit;
+    if (next === 0) return; // never let user turn off all days
+    void onPatch({ scheduleMask: next });
+  }
+
+  return (
+    <div className="rounded-card border border-hairline bg-bg/40 px-3 py-2.5 space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 text-left text-sm truncate hover:text-accent transition"
+        >
+          {habit.title}
+        </button>
+        <button
+          onClick={onRemove}
+          disabled={busy}
+          aria-label="Remove"
+          className="w-7 h-7 grid place-items-center rounded-pill text-muted hover:text-danger hover:bg-danger/10 transition disabled:opacity-40"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="space-y-3 pt-2 border-t border-hairline">
+          {/* LL — weekday schedule */}
+          <div>
+            <div className="eyebrow mb-1.5">{i.goalEdit.schedule}</div>
+            <div className="grid grid-cols-7 gap-1">
+              {labels.map((label, idx) => {
+                const on = (mask & (1 << idx)) !== 0;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => toggleDay(idx)}
+                    className={`py-1.5 rounded-card text-[11px] font-semibold transition ${
+                      on ? 'bg-accent text-white' : 'bg-white/[0.04] text-muted hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[10px] text-muted mt-1.5">{i.goalEdit.scheduleHint}</div>
+          </div>
+
+          {/* NN — per-habit reminder */}
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <span className="flex-1 text-xs">{i.goalEdit.perHabitReminder}</span>
+              <button
+                type="button"
+                onClick={() => void onPatch({
+                  reminderEnabled: !reminderOn,
+                  reminderHour: reminderOn ? null : hh,
+                  reminderMinute: reminderOn ? null : mm,
+                })}
+                className={`relative shrink-0 w-10 h-6 rounded-pill transition ${reminderOn ? 'bg-accent' : 'bg-white/10'}`}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-pill bg-white shadow-card transition-all"
+                  style={{ left: reminderOn ? '18px' : '2px' }}
+                />
+              </button>
+            </label>
+            {reminderOn && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="eyebrow shrink-0">{i.goalEdit.reminderTime}</span>
+                <div className="flex items-center gap-1">
+                  <NumStepper value={hh} min={0} max={23} step={1} onChange={(v) => void onPatch({ reminderHour: v })} />
+                  <span className="text-muted">:</span>
+                  <NumStepper value={mm} min={0} max={59} step={5} onChange={(v) => void onPatch({ reminderMinute: v })} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NumStepper({
+  value, min, max, step, onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <button
+        onClick={() => onChange(Math.max(min, value - step))}
+        className="w-6 h-6 rounded-pill border border-hairlineStrong text-muted hover:text-accent transition active:scale-95"
+      >−</button>
+      <div className="min-w-[2.5rem] text-center hud-num text-sm tabular">{String(value).padStart(2, '0')}</div>
+      <button
+        onClick={() => onChange(Math.min(max, value + step))}
+        className="w-6 h-6 rounded-pill border border-hairlineStrong text-muted hover:text-accent transition active:scale-95"
+      >+</button>
     </div>
   );
 }

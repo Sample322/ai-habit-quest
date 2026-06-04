@@ -15,6 +15,7 @@ import { SettingsSheet } from './components/SettingsSheet';
 import { TutorialOverlay, shouldShowTutorial } from './components/TutorialOverlay';
 import { GoalEditModal } from './components/GoalEditModal';
 import { track } from './lib/analytics';
+import { iconFor } from './lib/achievement-icons';
 
 // EE: lazy-load rarely-opened screens / modals. These are imported only when
 // the user actually triggers them — keeps the initial JS bundle lean.
@@ -387,6 +388,20 @@ function Header({
             </div>
           ) : (
             <div className="eyebrow mt-0.5 truncate">Lv {user.level} · {i.appTitle}</div>
+          )}
+          {user.showcase && user.showcase.length > 0 && (
+            <div className="mt-1 flex items-center gap-1">
+              {user.showcase.slice(0, 3).map((code) => (
+                <span
+                  key={code}
+                  className="text-xs leading-none"
+                  title={code}
+                  aria-label={code}
+                >
+                  {iconFor(code)}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { X, Bell, Globe, Clock, User as UserIcon, MapPin, BellRing } from 'lucide-react';
+import { X, Bell, Globe, Clock, User as UserIcon, MapPin, BellRing, Brain, Crown } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -100,6 +100,18 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
     haptic('light');
     try {
       const updated = await api.updatePrefs({ [key]: value });
+      onUserChange(updated);
+      notify('success');
+    } catch {
+      notify('error');
+    }
+  }
+
+  async function updateCoach(style: 'gentle' | 'strict' | 'humor' | null): Promise<void> {
+    if (!user.isPremium) return;
+    haptic('light');
+    try {
+      const updated = await api.updatePrefs({ aiCoachingStyle: style });
       onUserChange(updated);
       notify('success');
     } catch {
@@ -267,6 +279,38 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
           </div>
         </section>
 
+        {/* AI coach style (Premium) */}
+        <section className={`card p-4 space-y-3 ${user.isPremium ? '' : 'opacity-75'}`}>
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 w-10 h-10 rounded-pill grid place-items-center border border-hairlineStrong bg-bg/40">
+              <Brain size={16} className="text-accent" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold leading-tight flex items-center gap-1.5">
+                {i.coach.title}
+                {!user.isPremium && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-pill bg-accentGrad text-white flex items-center gap-1">
+                    <Crown size={10} /> Pro
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-muted mt-0.5">
+                {user.isPremium ? i.coach.hint : i.coach.premiumOnly}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <CoachButton active={user.aiCoachingStyle === null} disabled={!user.isPremium}
+              onClick={() => updateCoach(null)}>{i.coach.none}</CoachButton>
+            <CoachButton active={user.aiCoachingStyle === 'gentle'} disabled={!user.isPremium}
+              onClick={() => updateCoach('gentle')}>{i.coach.gentle}</CoachButton>
+            <CoachButton active={user.aiCoachingStyle === 'strict'} disabled={!user.isPremium}
+              onClick={() => updateCoach('strict')}>{i.coach.strict}</CoachButton>
+            <CoachButton active={user.aiCoachingStyle === 'humor'} disabled={!user.isPremium}
+              onClick={() => updateCoach('humor')}>{i.coach.humor}</CoachButton>
+          </div>
+        </section>
+
         {/* Language */}
         <section className="card p-4 space-y-3">
           <div className="flex items-center gap-3">
@@ -342,6 +386,31 @@ function NotifToggle({
         />
       </button>
     </label>
+  );
+}
+
+function CoachButton({
+  active, disabled, onClick, children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-pill py-2 text-sm font-semibold transition border disabled:cursor-not-allowed ${
+        active
+          ? 'bg-accentGrad text-white border-transparent shadow-glow'
+          : disabled
+          ? 'border-hairline text-muted/60 bg-white/[0.01]'
+          : 'border-hairlineStrong text-text bg-white/[0.02] hover:bg-white/[0.04]'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
