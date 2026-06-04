@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown, Trophy, Sparkles } from 'lucide-react';
+import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown, Trophy, Sparkles, Share2 } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { t, type Lang } from '../lib/i18n';
 import type { Achievement, AchievementRarity, LeaderboardScope, LeaguesMe, ProgressOverview, Leaderboard, SeasonView, User } from '../lib/types';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
+import { ShareProgressCard } from '../components/ShareProgressCard';
 
 export function Progress({ lang, user, onUserChange, onPremiumClick }: {
   lang: Lang;
@@ -22,6 +23,7 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
   const [boardScope, setBoardScope] = useState<LeaderboardScope>('global');
   const [freezeMsg, setFreezeMsg] = useState<string | null>(null);
   const [freezeBusy, setFreezeBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     void (async () => setData(await api.progress()))();
@@ -87,6 +89,15 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
           </div>
         </div>
       </section>
+
+      {/* Share progress action */}
+      <button
+        onClick={() => setShareOpen(true)}
+        className="w-full rounded-pill border border-hairlineStrong bg-white/[0.02] hover:bg-white/[0.05] py-3 px-5 text-sm font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
+      >
+        <Share2 size={14} className="text-accent" />
+        {i.share.action}
+      </button>
 
       {/* Quick stats */}
       <section className="grid grid-cols-3 gap-2.5">
@@ -229,6 +240,15 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
             <ChevronRight size={18} className="text-muted" />
           </div>
         </button>
+      )}
+
+      {shareOpen && (
+        <ShareProgressCard
+          lang={lang}
+          user={user}
+          rankName={data.rank.name}
+          onClose={() => setShareOpen(false)}
+        />
       )}
     </div>
   );

@@ -44,6 +44,13 @@ const dict = {
       copied: 'Скопировано ✓',
       shareText: 'Заходи в AI Habit Quest — собираем привычки с AI-планом 💪',
     },
+    share: {
+      action: 'Поделиться прогрессом',
+      title: 'Твой прогресс',
+      download: 'Скачать PNG',
+      shareTo: 'Поделиться в TG',
+      hint: 'Скачай картинку или поделись текстом + рефералкой',
+    },
     bonus: {
       title: 'Бонус от ИИ',
       hint: 'Дополнительное задание на сегодня — сгорит к концу дня.',
@@ -261,6 +268,13 @@ const dict = {
       copy: 'Copy',
       copied: 'Copied ✓',
       shareText: 'Join me on AI Habit Quest — build habits with an AI plan 💪',
+    },
+    share: {
+      action: 'Share progress',
+      title: 'Your progress',
+      download: 'Download PNG',
+      shareTo: 'Share to TG',
+      hint: 'Download the image or share text + your referral link',
     },
     bonus: {
       title: 'AI bonus',

@@ -4,6 +4,7 @@ import { Crown, Check, X, Infinity as InfinityIcon, CreditCard, Gift } from 'luc
 import { api } from '../lib/api';
 import { openInvoice } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
+import { track } from '../lib/analytics';
 import type { User } from '../lib/types';
 
 interface SubscriptionProps {
@@ -93,6 +94,7 @@ function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSub
     try {
       await api.claimTrial();
       setInfo(i.subscription.freeTrialClaimed);
+      track('trial_claimed');
       await onActivated();
     } catch (err) {
       const code = ((err as { body?: { code?: string } }).body)?.code;
@@ -112,8 +114,12 @@ function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSub
     }, 20_000);
     try {
       const { invoiceLink } = await api.cardInvoice();
+      track('card_invoice_opened');
       openInvoice(invoiceLink, async (status) => {
-        if (status === 'paid') await onActivated();
+        if (status === 'paid') {
+          track('card_paid');
+          await onActivated();
+        }
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : i.errors.generic);

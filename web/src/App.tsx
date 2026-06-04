@@ -17,6 +17,7 @@ import { AvatarFrame } from './components/ui/AvatarFrame';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TutorialOverlay, shouldShowTutorial } from './components/TutorialOverlay';
 import { GoalEditModal } from './components/GoalEditModal';
+import { track } from './lib/analytics';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -66,7 +67,10 @@ export function App() {
         setToken(token);
         await refreshUser();
         await refreshGoals();
-        if (!cancelled) setStatus('ready');
+        if (!cancelled) {
+          setStatus('ready');
+          track('auth_ok');
+        }
       } catch (err) {
         if (cancelled) return;
         setStatus('auth_failed');
@@ -219,6 +223,7 @@ export function App() {
             // appear immediately. The increment is what changes the useEffect
             // dep, so even rapid back-to-back creates trigger reloads.
             setTodayRefreshKey((k) => k + 1);
+            track('goal_created');
           }}
         />
       )}

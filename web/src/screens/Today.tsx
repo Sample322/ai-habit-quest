@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check, Pencil } from 'lucide-react';
+import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check, Pencil, Quote } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -10,6 +10,8 @@ import { GoalInsightsModal } from '../components/GoalInsightsModal';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
 import { Confetti } from '../components/ui/Confetti';
+import { quoteOfDay } from '../lib/quotes';
+import { track } from '../lib/analytics';
 
 interface TodayProps {
   lang: Lang;
@@ -126,7 +128,9 @@ export function Today({
         streak: { ...user.streak, current: snap.streakCurrent },
       });
       notify(task.doneAt ? 'success' : 'warning');
+      if (task.doneAt) track('task_done');
       if (newAchievements && newAchievements.length > 0) {
+        track('achievement_unlocked', { code: newAchievements[0].code });
         const a = newAchievements[0];
         showToast(`🏆 ${i.achievementUnlocked} ${a.icon} ${a.title}`);
       }
@@ -151,6 +155,7 @@ export function Today({
     setConfetti(true);
     notify('success');
     showToast(lang === 'en' ? '🎉 Day completed!' : '🎉 День закрыт!');
+    track('day_completed', { total: overall.total });
     const off = setTimeout(() => setConfetti(false), 2600);
     return () => clearTimeout(off);
   }, [overall.done, overall.total, tasks, lang]);
@@ -158,9 +163,20 @@ export function Today({
   const hasTasks = tasks !== null && tasks.length > 0;
   const isLoading = tasks === null;
 
+  const todayQuote = useMemo(() => quoteOfDay(lang), [lang]);
+
   return (
     <div className="space-y-5">
       <HeroRing lang={lang} pct={overall.pct} done={overall.done} total={overall.total} activeGoalsCount={activeGoalsCount} />
+
+      {/* Daily quote — deterministic per day, lives between hero and bonus */}
+      <section className="rounded-card border border-hairline bg-elevated/40 p-4 flex items-start gap-3 animate-fade-in">
+        <Quote size={14} className="shrink-0 mt-1 text-accent" />
+        <div className="text-sm leading-snug">
+          <span className="text-text">{todayQuote.text}</span>
+          {todayQuote.author && <span className="text-muted text-[11px] ml-2">— {todayQuote.author}</span>}
+        </div>
+      </section>
 
       {regenMsg && (
         <div className="surface text-sm flex items-center gap-3 animate-rise">
