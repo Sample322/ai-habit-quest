@@ -152,21 +152,23 @@ export function GoalEditModal({ lang, goal, onClose, onChanged }: Props) {
             ))}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 min-w-0">
             <input
               value={newHabit}
               onChange={(e) => setNewHabit(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void addHabit(); }}
               placeholder={i.goalEdit.habitPlaceholder}
-              className="flex-1 appearance-none bg-elevated text-text caret-accent rounded-card px-3 py-2.5 outline-none border border-hairline focus:border-accent transition text-sm placeholder:text-dim"
+              className="min-w-0 flex-1 appearance-none bg-elevated text-text caret-accent rounded-card px-3 py-2.5 outline-none border border-hairline focus:border-accent transition text-sm placeholder:text-dim"
               style={{ colorScheme: 'dark', WebkitTextFillColor: '#f5f7fb' }}
             />
             <button
               onClick={addHabit}
               disabled={busy === 'addHabit' || newHabit.trim().length < 2}
-              className="shrink-0 px-4 rounded-card bg-accentGrad text-white text-sm font-semibold shadow-glow transition active:scale-95 disabled:opacity-40 flex items-center gap-1"
+              aria-label={i.goalEdit.addHabit}
+              title={i.goalEdit.addHabit}
+              className="shrink-0 w-11 h-11 rounded-card bg-accentGrad text-white shadow-glow transition active:scale-95 disabled:opacity-40 grid place-items-center"
             >
-              <Plus size={14} /> {i.goalEdit.addHabit}
+              <Plus size={18} />
             </button>
           </div>
         </section>
