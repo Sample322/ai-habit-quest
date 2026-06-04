@@ -25,8 +25,8 @@ test.describe('infrastructure smoke', () => {
     expect(['webhook', 'long-polling']).toContain(body.mode);
   });
 
-  test('ai-service /health is reachable', async ({ request }) => {
-    const r = await request.get(AI + '/health', { timeout: 10_000 });
+  test('ai-service /healthz is reachable', async ({ request }) => {
+    const r = await request.get(AI + '/healthz', { timeout: 10_000 });
     expect(r.status()).toBe(200);
   });
 
