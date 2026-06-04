@@ -65,6 +65,13 @@ model User {
   notifWeeklyRecap   Boolean @default(true)
   // T: weekly recap tracking — last Monday a recap DM was sent (avoid double).
   lastRecapAt        DateTime?
+  // RR: up to 3 favourite achievement codes to surface on Header + leaderboard.
+  showcaseAchievements String[] @default([])
+  // TT: Premium AI coaching style. Forwarded to ai-service when generating plans.
+  // Allowed: 'gentle' | 'strict' | 'humor' | null.
+  aiCoachingStyle    String?
+  // UU: dedupe weekly AI review.
+  lastAiReviewAt     DateTime?
   isPremium     Boolean  @default(false)
   premiumUntil  DateTime?
   streakCurrent Int      @default(0)
@@ -139,6 +146,15 @@ model Habit {
   goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
   title     String
   position  Int      @default(0)
+  // LL: weekly schedule bitmask. bit0=Mon … bit6=Sun. Default 127 = all 7 days.
+  // Materialiser only inserts a DailyTask when (1 << dayOfWeek) & mask != 0.
+  scheduleMask Int   @default(127)
+  // NN: per-habit reminder override. When enabled, the notifications scheduler
+  // DMs at this local time instead of the user's global reminder. Defaults
+  // match the user's global so opt-in is a single toggle on Habit edit.
+  reminderEnabled Boolean @default(false)
+  reminderHour    Int?
+  reminderMinute  Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

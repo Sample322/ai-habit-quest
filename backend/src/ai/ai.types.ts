@@ -1,11 +1,15 @@
 export type AiPlanCategory = 'sport' | 'study' | 'discipline' | 'custom';
 
+export type AiCoachingStyle = 'gentle' | 'strict' | 'humor';
+
 export interface AiPlanRequest {
   category: AiPlanCategory;
   goalTitle: string;
   horizonDays: number;
   level?: 'beginner' | 'intermediate' | 'advanced';
   language?: 'ru' | 'en';
+  /** TT: Premium-only coaching tone override forwarded to ai-service. */
+  coachingStyle?: AiCoachingStyle | null;
 }
 
 export interface AiPlanHabit {

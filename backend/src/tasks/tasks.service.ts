@@ -256,10 +256,16 @@ function buildDailyTaskInserts(
 
   const dayIndex = computeDayIndex(goal.startedAt, plan.horizonDays);
   const day = plan.schedule[dayIndex] ?? plan.schedule[0];
-  const habits = goal.habits.slice(0, 3);
-  if (habits.length === 0) return [];
+  // LL: filter habits by weekly schedule. bit0 = Monday … bit6 = Sunday.
+  // Mask 127 (default) keeps every weekday active.
+  const dow = (localDate.getUTCDay() + 6) % 7;
+  const dowBit = 1 << dow;
+  const activeHabits = goal.habits
+    .filter((h) => (h.scheduleMask & dowBit) !== 0)
+    .slice(0, 3);
+  if (activeHabits.length === 0) return [];
 
-  return habits.map((habit, idx) => ({
+  return activeHabits.map((habit, idx) => ({
     userId,
     habitId: habit.id,
     localDate,

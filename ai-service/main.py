@@ -63,12 +63,16 @@ Category = Literal["sport", "study", "discipline", "custom"]
 Language = Literal["ru", "en"]
 
 
+CoachingStyle = Literal["gentle", "strict", "humor"]
+
+
 class PlanRequest(BaseModel):
     category: Category
     goalTitle: str = Field(min_length=1, max_length=200)
     horizonDays: int = Field(ge=1, le=30)
     level: Literal["beginner", "intermediate", "advanced"] | None = "beginner"
     language: Language | None = "ru"
+    coachingStyle: CoachingStyle | None = None
 
 
 class PlanHabit(BaseModel):
@@ -100,6 +104,22 @@ class BonusTaskResponse(BaseModel):
     provider: Literal["stub", "openai", "ollama"]
     title: str
     xp: int
+
+
+class ReviewRequest(BaseModel):
+    language: Language | None = "ru"
+    coachingStyle: CoachingStyle | None = None
+    name: str | None = None
+    weekTasksDone: int
+    weekXp: int
+    streakCurrent: int
+    streakBest: int
+    topGoalTitle: str | None = None
+
+
+class ReviewResponse(BaseModel):
+    provider: Literal["stub", "openai", "ollama"]
+    text: str
 
 
 @app.get("/healthz")
@@ -157,6 +177,89 @@ async def bonus_task(req: BonusTaskRequest) -> BonusTaskResponse:
         except Exception as exc:  # noqa: BLE001
             logger.warning("bonus OpenAI failed, using stub: %s", exc)
     return BonusTaskResponse(provider="stub", title=BONUS_STUB[req.language or "ru"], xp=25)
+
+
+@app.post("/review", response_model=ReviewResponse)
+async def review(req: ReviewRequest) -> ReviewResponse:
+    """UU: weekly personal AI review for Premium users."""
+    logger.info(
+        "review: provider=%s style=%s tasksDone=%d xp=%d streak=%d",
+        AI_PROVIDER, req.coachingStyle, req.weekTasksDone, req.weekXp, req.streakCurrent,
+    )
+    if AI_PROVIDER == "openai":
+        try:
+            text = await _review_with_openai(req)
+            return ReviewResponse(provider="openai", text=text)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("review OpenAI failed, using stub: %s", exc)
+    return ReviewResponse(provider="stub", text=_stub_review(req))
+
+
+def _stub_review(req: ReviewRequest) -> str:
+    if req.language == "en":
+        return (
+            f"Solid week: {req.weekTasksDone} tasks done, +{req.weekXp} XP, "
+            f"streak {req.streakCurrent}d (best {req.streakBest}). Keep the rhythm going."
+        )
+    return (
+        f"Хорошая неделя: задач сделано {req.weekTasksDone}, +{req.weekXp} XP, "
+        f"серия {req.streakCurrent} дн. (рекорд {req.streakBest}). Держи ритм."
+    )
+
+
+async def _review_with_openai(req: ReviewRequest) -> str:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    lang = "Russian" if req.language == "ru" else "English"
+    tone = _COACHING_TONES.get(req.coachingStyle or "", "")
+    prompt = (
+        f"Write a SHORT personal weekly recap for a habit tracker user named "
+        f"{req.name or 'friend'}. Stats: tasks done this week={req.weekTasksDone}, "
+        f"XP earned this week={req.weekXp}, current streak={req.streakCurrent} days "
+        f"(best {req.streakBest}), top goal={req.topGoalTitle or '-'}. "
+        f"3 to 4 sentences max. {tone} "
+        f"Acknowledge effort, name one thing to keep doing, and one concrete focus "
+        f"for next week. Write in {lang}. Plain text only, no markdown, no JSON."
+    )
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": OPENAI_APP_URL,
+        "X-Title": OPENAI_APP_NAME,
+    }
+    payload = {
+        "model": OPENAI_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a concise habit coach."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 220,
+    }
+    body = None
+    retryable_status = {429, 500, 502, 503, 504}
+    async with httpx.AsyncClient(timeout=30) as client:
+        for attempt in range(1, OPENAI_MAX_ATTEMPTS + 1):
+            try:
+                resp = await client.post(f"{OPENAI_BASE_URL}/chat/completions", json=payload, headers=headers)
+            except httpx.HTTPError as exc:
+                if attempt < OPENAI_MAX_ATTEMPTS:
+                    await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                    continue
+                raise HTTPException(status_code=502, detail=f"OpenAI request error: {exc}") from exc
+            if resp.status_code < 400:
+                body = resp.json()
+                break
+            if resp.status_code in retryable_status and attempt < OPENAI_MAX_ATTEMPTS:
+                await asyncio.sleep(OPENAI_RETRY_DELAY * attempt)
+                continue
+            raise HTTPException(status_code=502, detail=f"OpenAI API {resp.status_code}: {resp.text[:200]}")
+    if body is None:
+        raise HTTPException(status_code=502, detail="OpenAI API failed for review")
+    text = str(body["choices"][0]["message"]["content"]).strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="Review missing text")
+    return text[:1000]
 
 
 async def _bonus_with_openai(req: BonusTaskRequest) -> str:
@@ -358,8 +461,24 @@ async def _generate_with_ollama(req: PlanRequest) -> PlanResponse:
 # Shared helpers
 # ----------------------------------------------------------------------------
 
+_COACHING_TONES = {
+    "gentle": (
+        "Tone: warm, encouraging, supportive. Soft verbs, no shouting, accept small wins."
+    ),
+    "strict": (
+        "Tone: direct, no-nonsense, drill-sergeant. Short imperatives, accountability framing."
+    ),
+    "humor": (
+        "Tone: light, witty, playful. Include a tasteful joke or pun where it fits."
+    ),
+}
+
+
 def _build_prompt(req: PlanRequest) -> str:
     lang = "Russian" if req.language == "ru" else "English"
+    tone_line = (
+        f"\n{_COACHING_TONES[req.coachingStyle]}\n" if req.coachingStyle in _COACHING_TONES else ""
+    )
     return (
         f"Build a JSON plan for category={req.category}, goalTitle={req.goalTitle!r}, "
         f"level={req.level}, horizonDays={req.horizonDays}.\n"
@@ -368,8 +487,9 @@ def _build_prompt(req: PlanRequest) -> str:
         f'  "schedule": array of {req.horizonDays} objects, one per day, each with\n'
         f'              {{ "day": 1..{req.horizonDays}, "tasks": array of exactly 3 short imperative strings }}\n'
         f"Each task is a single concrete action the user can do today, max 80 characters.\n"
-        f"Day 1 should be very easy (entry barrier). Difficulty progresses gradually.\n"
-        f"All text written in {lang}. Do not wrap in markdown. JSON only."
+        f"Day 1 should be very easy (entry barrier). Difficulty progresses gradually."
+        f"{tone_line}"
+        f"\nAll text written in {lang}. Do not wrap in markdown. JSON only."
     )
 
 

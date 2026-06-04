@@ -124,6 +124,7 @@ export class GoalsService {
       goalTitle: goal.title,
       horizonDays,
       language: user.languageCode === 'en' ? 'en' : 'ru',
+      coachingStyle: user.isPremium ? user.aiCoachingStyle : null,
     });
 
     // Force materialisation of today's tasks for THIS goal. Without this, a
@@ -263,6 +264,7 @@ export class GoalsService {
       goalTitle: goal.title,
       horizonDays: goal.horizonDays,
       language: user.languageCode === 'en' ? 'en' : 'ru',
+      coachingStyle: user.isPremium ? user.aiCoachingStyle : null,
     });
 
     await this.tasks.materialiseTodayForUser(userId);

@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { BotService } from '../bot/bot.service';
+import { AiService } from '../ai/ai.service';
 import { todayLocalDate } from '../tasks/tasks.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class NotificationsScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bot: BotService,
+    private readonly ai: AiService,
   ) {}
 
   // Tick once per minute and send to users whose local reminder time = current minute.
@@ -46,6 +48,61 @@ export class NotificationsScheduler {
       sent++;
     }
     if (sent > 0) this.logger.log(`Sent ${sent} reminders`);
+  }
+
+  /**
+   * NN: per-habit reminders. Fires every minute, picks every Habit whose
+   * `reminderEnabled` is true and (hour, minute) matches the OWNER's current
+   * local time. Skipped if the user has notifReminders globally off, the
+   * habit is inactive on this weekday (LL), or its DailyTask is already done.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async perHabitTick(): Promise<void> {
+    const habits = await this.prisma.habit.findMany({
+      where: {
+        reminderEnabled: true,
+        reminderHour: { not: null },
+        reminderMinute: { not: null },
+        user: { notifReminders: true },
+      },
+      select: {
+        id: true,
+        title: true,
+        scheduleMask: true,
+        reminderHour: true,
+        reminderMinute: true,
+        user: { select: { id: true, telegramId: true, timezone: true, languageCode: true } },
+      },
+    });
+
+    const now = new Date();
+    let sent = 0;
+    for (const h of habits) {
+      const tz = h.user.timezone;
+      if (!matchesLocalTime(now, tz, h.reminderHour!, h.reminderMinute!)) continue;
+
+      // Honour LL weekly schedule.
+      const localDate = todayLocalDate(tz);
+      const dowBit = 1 << ((localDate.getUTCDay() + 6) % 7);
+      if ((h.scheduleMask & dowBit) === 0) continue;
+
+      const task = await this.prisma.dailyTask.findFirst({
+        where: { userId: h.user.id, habitId: h.id, localDate },
+      });
+      if (task?.doneAt) continue;
+
+      const isRu = h.user.languageCode !== 'en';
+      const msg = isRu
+        ? `⏰ Напоминание: «${h.title}». Если уже сделал — отметь в приложении.`
+        : `⏰ Reminder: "${h.title}". If you already did it, tick it off in the app.`;
+      try {
+        await this.bot.sendReminder(h.user.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`per-habit reminder failed for ${h.id}: ${(err as Error).message}`);
+      }
+    }
+    if (sent > 0) this.logger.log(`Sent ${sent} per-habit reminders`);
   }
 
   /**
@@ -268,6 +325,80 @@ export class NotificationsScheduler {
       });
     }
     if (sent > 0) this.logger.log(`Sent ${sent} trial-expiry nudges`);
+  }
+
+  /**
+   * UU: Sunday 18:00 UTC — for Premium users with notifWeeklyRecap on,
+   * ask ai-service for a short personalised review and DM it. Dedupe via
+   * `lastAiReviewAt`. Falls back silently when ai-service is unreachable.
+   */
+  @Cron('0 18 * * 0', { timeZone: 'UTC' })
+  async aiWeeklyReview(): Promise<void> {
+    const now = new Date();
+    const lastWeek = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        isPremium: true,
+        notifWeeklyRecap: true,
+        OR: [{ lastAiReviewAt: null }, { lastAiReviewAt: { lt: lastWeek } }],
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        languageCode: true,
+        firstName: true,
+        aiCoachingStyle: true,
+        streakCurrent: true,
+        streakBest: true,
+      },
+    });
+
+    let sent = 0;
+    for (const u of users) {
+      const [tasksDone, xpAgg, topGoal] = await Promise.all([
+        this.prisma.dailyTask.count({ where: { userId: u.id, doneAt: { gte: weekAgo } } }),
+        this.prisma.dailyTask.aggregate({
+          where: { userId: u.id, doneAt: { gte: weekAgo } },
+          _sum: { xpAwarded: true },
+        }),
+        this.prisma.goal.findFirst({
+          where: { userId: u.id, status: 'active' },
+          orderBy: { createdAt: 'desc' },
+          select: { title: true },
+        }),
+      ]);
+      const weekXp = xpAgg._sum.xpAwarded ?? 0;
+      if (tasksDone === 0) {
+        await this.prisma.user.update({ where: { id: u.id }, data: { lastAiReviewAt: now } });
+        continue;
+      }
+
+      const review = await this.ai.generateWeeklyReview({
+        language: u.languageCode === 'en' ? 'en' : 'ru',
+        coachingStyle: (u.aiCoachingStyle as 'gentle' | 'strict' | 'humor' | null) ?? null,
+        name: u.firstName,
+        weekTasksDone: tasksDone,
+        weekXp,
+        streakCurrent: u.streakCurrent,
+        streakBest: u.streakBest,
+        topGoalTitle: topGoal?.title ?? null,
+      });
+      if (!review) continue;
+
+      const isRu = u.languageCode !== 'en';
+      const header = isRu ? '🧠 Итоги недели от тренера' : '🧠 Weekly coach recap';
+      const msg = `${header}\n\n${review.text}`;
+      try {
+        await this.bot.sendReminder(u.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`ai review DM failed for ${u.id}: ${(err as Error).message}`);
+      }
+      await this.prisma.user.update({ where: { id: u.id }, data: { lastAiReviewAt: now } });
+    }
+    if (sent > 0) this.logger.log(`Sent ${sent} AI weekly reviews`);
   }
 }
 

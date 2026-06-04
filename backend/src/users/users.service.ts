@@ -70,6 +70,8 @@ export class UsersService {
       isAdmin: isAdminTelegramId(u.telegramId),
       premiumUntil: u.premiumUntil,
       hasUsedTrial: !!u.trialClaimedAt,
+      showcase: u.showcaseAchievements ?? [],
+      aiCoachingStyle: u.aiCoachingStyle ?? null,
       streak: { current: u.streakCurrent, best: u.streakBest, freezesLeft: u.streakFreezesLeft },
       xpTotal: u.xpTotal,
       level: u.level,
@@ -97,6 +99,8 @@ export class UsersService {
       notifSeasons?: boolean;
       notifStreakBreak?: boolean;
       notifWeeklyRecap?: boolean;
+      showcaseAchievements?: string[];
+      aiCoachingStyle?: string | null;
     },
   ) {
     const data: Record<string, unknown> = {};
@@ -113,6 +117,25 @@ export class UsersService {
     if (prefs.notifSeasons !== undefined) data['notifSeasons'] = !!prefs.notifSeasons;
     if (prefs.notifStreakBreak !== undefined) data['notifStreakBreak'] = !!prefs.notifStreakBreak;
     if (prefs.notifWeeklyRecap !== undefined) data['notifWeeklyRecap'] = !!prefs.notifWeeklyRecap;
+    if (prefs.showcaseAchievements !== undefined) {
+      // RR: cap at 3 codes, de-dupe, ignore anything that isn't a string.
+      const seen = new Set<string>();
+      const codes: string[] = [];
+      for (const c of prefs.showcaseAchievements) {
+        if (typeof c !== 'string') continue;
+        const trimmed = c.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        codes.push(trimmed);
+        if (codes.length >= 3) break;
+      }
+      data['showcaseAchievements'] = codes;
+    }
+    if (prefs.aiCoachingStyle !== undefined) {
+      // TT: whitelist styles. NULL clears the override.
+      const v = prefs.aiCoachingStyle;
+      data['aiCoachingStyle'] = v && ['gentle', 'strict', 'humor'].includes(v) ? v : null;
+    }
     await this.prisma.user.update({ where: { id }, data });
     return this.getProfile(id);
   }

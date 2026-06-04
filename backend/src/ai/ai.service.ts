@@ -33,6 +33,34 @@ export class AiService {
    * Ask ai-service for one optional "stretch" bonus action for today.
    * Returns null on any failure so the caller can simply skip the bonus.
    */
+  /**
+   * UU: produce a short weekly review text. Returns null on any failure so
+   * the caller can skip the DM gracefully (the user gets the legacy
+   * notifications.weeklyRecap stats DM instead).
+   */
+  async generateWeeklyReview(req: {
+    language: 'ru' | 'en';
+    coachingStyle?: 'gentle' | 'strict' | 'humor' | null;
+    name?: string | null;
+    weekTasksDone: number;
+    weekXp: number;
+    streakCurrent: number;
+    streakBest: number;
+    topGoalTitle?: string | null;
+  }): Promise<{ provider: string; text: string } | null> {
+    try {
+      const resp = await this.http.post('/review', req);
+      const data = resp.data as { provider?: string; text?: string };
+      if (resp.status < 400 && data && typeof data.text === 'string' && data.text.length > 0) {
+        return { provider: data.provider ?? 'stub', text: data.text };
+      }
+      this.logger.warn(`review bad response status=${resp.status}`);
+    } catch (err) {
+      this.logger.warn(`review unreachable: ${(err as Error).message}`);
+    }
+    return null;
+  }
+
   async generateBonusTask(req: {
     category: string;
     goalTitle: string;

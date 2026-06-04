@@ -17,11 +17,12 @@ export class PlansService {
 
   async generateForGoal(
     goalId: string,
-    req: { category: GoalCategory; goalTitle: string; horizonDays: number; language: 'ru' | 'en' },
+    req: { category: GoalCategory; goalTitle: string; horizonDays: number; language: 'ru' | 'en'; coachingStyle?: string | null },
   ): Promise<AiPlanResponse> {
     // Cache key includes the normalized goalTitle so different goals get
     // different AI plans, AND so a previously cached `stub` fallback never
-    // gets returned for a brand-new goal title.
+    // gets returned for a brand-new goal title. Coaching style is part of the
+    // key so two users with different tones get different cached plans.
     const cacheKey = buildCacheKey(req);
     const cached = await this.prisma.planCache.findUnique({ where: { cacheKey } });
 
@@ -37,9 +38,10 @@ export class PlansService {
         goalTitle: req.goalTitle,
         horizonDays: req.horizonDays,
         language: req.language,
+        coachingStyle: (req.coachingStyle as AiPlanRequest['coachingStyle']) ?? null,
       });
       this.logger.log(
-        `plan generated goal=${goalId} title="${req.goalTitle}" provider=${plan.provider}`,
+        `plan generated goal=${goalId} title="${req.goalTitle}" provider=${plan.provider} style=${req.coachingStyle ?? '-'}`,
       );
     }
 
@@ -102,13 +104,14 @@ export class PlansService {
    */
   async regenerateForGoal(
     goalId: string,
-    req: { category: GoalCategory; goalTitle: string; horizonDays: number; language: 'ru' | 'en' },
+    req: { category: GoalCategory; goalTitle: string; horizonDays: number; language: 'ru' | 'en'; coachingStyle?: string | null },
   ): Promise<AiPlanResponse> {
     const plan = await this.ai.generatePlan({
       category: req.category as AiPlanRequest['category'],
       goalTitle: req.goalTitle,
       horizonDays: req.horizonDays,
       language: req.language,
+      coachingStyle: (req.coachingStyle as AiPlanRequest['coachingStyle']) ?? null,
     });
 
     if (plan.provider === 'stub') {
@@ -190,9 +193,12 @@ function buildCacheKey(req: {
   goalTitle: string;
   horizonDays: number;
   language: 'ru' | 'en';
+  coachingStyle?: string | null;
 }): string {
   const normalisedTitle = req.goalTitle.trim().toLowerCase().slice(0, 80);
-  return hashKey([req.category, req.horizonDays, req.language, normalisedTitle].join('|'));
+  return hashKey(
+    [req.category, req.horizonDays, req.language, req.coachingStyle ?? '-', normalisedTitle].join('|'),
+  );
 }
 
 function hashKey(input: string): string {

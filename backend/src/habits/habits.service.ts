@@ -71,4 +71,54 @@ export class HabitsService {
     await this.prisma.habit.delete({ where: { id: habitId } });
     return { ok: true };
   }
+
+  /**
+   * Update editable fields on a habit:
+   *  - title
+   *  - scheduleMask (LL): bitmask of weekdays the habit is active on
+   *  - reminderEnabled / reminderHour / reminderMinute (NN)
+   *
+   * Validates ownership before allowing the change.
+   */
+  async update(
+    userId: string,
+    habitId: string,
+    patch: {
+      title?: string;
+      scheduleMask?: number;
+      reminderEnabled?: boolean;
+      reminderHour?: number | null;
+      reminderMinute?: number | null;
+    },
+  ) {
+    const habit = await this.prisma.habit.findFirst({ where: { id: habitId, userId } });
+    if (!habit) throw new NotFoundException('Habit not found');
+
+    const data: Record<string, unknown> = {};
+    if (patch.title !== undefined) {
+      const clean = patch.title.trim();
+      if (clean.length < 2) throw new BadRequestException('Habit title too short');
+      data.title = clean;
+    }
+    if (patch.scheduleMask !== undefined) {
+      const mask = Math.floor(patch.scheduleMask);
+      if (mask < 0 || mask > 127) throw new BadRequestException('scheduleMask must be 0..127');
+      data.scheduleMask = mask;
+    }
+    if (patch.reminderEnabled !== undefined) data.reminderEnabled = !!patch.reminderEnabled;
+    if (patch.reminderHour !== undefined) {
+      data.reminderHour = patch.reminderHour === null ? null : clamp(patch.reminderHour, 0, 23);
+    }
+    if (patch.reminderMinute !== undefined) {
+      data.reminderMinute = patch.reminderMinute === null ? null : clamp(patch.reminderMinute, 0, 59);
+    }
+
+    return this.prisma.habit.update({ where: { id: habitId }, data });
+  }
+}
+
+function clamp(n: number, min: number, max: number): number {
+  if (n < min) return min;
+  if (n > max) return max;
+  return Math.floor(n);
 }
