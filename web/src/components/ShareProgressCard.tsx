@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Download, Sparkles, Send } from 'lucide-react';
+import { X, Download, Sparkles } from 'lucide-react';
 
 import { api } from '../lib/api';
-import { canShareToStory, haptic, notify, shareToStory, shareUrl } from '../lib/telegram';
+import { canShareToStory, haptic, notify, shareToStory } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { User } from '../lib/types';
 
@@ -25,7 +25,7 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
   const i = t(lang);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'story' | 'chat' | null>(null);
+  const [busy, setBusy] = useState<'story' | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const storySupported = canShareToStory();
 
@@ -89,29 +89,10 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     }
   }
 
-  async function chat(): Promise<void> {
-    if (!dataUrl || busy) return;
-    setBusy('chat');
-    haptic('light');
-    try {
-      // Upload the PNG to the backend → get a public URL. We share that URL
-      // in a Telegram chat, Telegram unfurls the image inline as a preview.
-      // We deliberately do NOT call navigator.share / fetch(data:URL) — both
-      // hang inside Telegram WebView.
-      const url = await uploadDataUrl();
-      if (!url) return;
-      const text = lang === 'en'
-        ? `🏆 ${rankName} · 🔥 ${user.streak.current}d · ⚡ ${user.xpTotal} XP`
-        : `🏆 ${rankName} · 🔥 ${user.streak.current}д · ⚡ ${user.xpTotal} XP`;
-      // Share the image URL itself; Telegram auto-previews image/png URLs.
-      shareUrl(url, text);
-      notify('success');
-    } catch {
-      notify('error');
-    } finally {
-      setBusy(null);
-    }
-  }
+  // Chat-share was removed: Telegram's t.me/share/url flow attaches a URL
+  // message, not the rendered image, and the WebView blocks navigator.share
+  // with files. If a future Telegram WebApp API lets a Mini App attach a
+  // file directly to a chat, bring this back.
 
   return (
     <div
@@ -134,23 +115,17 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
         </div>
 
         <div className="rounded-card overflow-hidden border border-hairline">
-          <canvas ref={canvasRef} width={1080} height={1350} className="w-full h-auto block" />
+          <canvas ref={canvasRef} width={1080} height={1920} className="w-full h-auto block" />
         </div>
 
-        {/* Uniform 3-button row */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Two-button row: Download + Story (chat removed — TG WebApp can't
+            attach images directly to chats yet) */}
+        <div className="grid grid-cols-2 gap-2">
           <ActionBtn
             onClick={download}
             disabled={!dataUrl}
             icon={<Download size={16} />}
             label={i.share.download}
-            variant="ghost"
-          />
-          <ActionBtn
-            onClick={chat}
-            disabled={!dataUrl || busy !== null}
-            icon={<Send size={16} />}
-            label={busy === 'chat' ? '…' : i.share.shareToChat}
             variant="ghost"
           />
           <ActionBtn
@@ -198,9 +173,10 @@ function drawCard(
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const W = canvas.width;
-  const H = canvas.height;
+  const W = canvas.width;   // 1080
+  const H = canvas.height;  // 1920 (9:16 → fits Telegram Stories without zoom)
 
+  // Onyx gradient base
   const bg = ctx.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, '#11131a');
   bg.addColorStop(0.5, '#0c0d12');
@@ -208,60 +184,110 @@ function drawCard(
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  const g1 = ctx.createRadialGradient(W * 0.2, H * 0.15, 0, W * 0.2, H * 0.15, W * 0.5);
-  g1.addColorStop(0, 'rgba(124,92,255,0.45)');
+  // Violet bloom — top
+  const g1 = ctx.createRadialGradient(W * 0.5, H * 0.12, 0, W * 0.5, H * 0.12, W * 0.9);
+  g1.addColorStop(0, 'rgba(124,92,255,0.55)');
   g1.addColorStop(1, 'rgba(124,92,255,0)');
   ctx.fillStyle = g1;
   ctx.fillRect(0, 0, W, H);
 
-  const g2 = ctx.createRadialGradient(W * 0.85, H * 0.85, 0, W * 0.85, H * 0.85, W * 0.6);
+  // Emerald bloom — bottom-right
+  const g2 = ctx.createRadialGradient(W * 0.85, H * 0.85, 0, W * 0.85, H * 0.85, W * 0.9);
   g2.addColorStop(0, 'rgba(25,213,122,0.30)');
   g2.addColorStop(1, 'rgba(25,213,122,0)');
   ctx.fillStyle = g2;
   ctx.fillRect(0, 0, W, H);
 
+  // Faint grid texture for depth
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 64) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 64) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.fillStyle = '#7c5cff';
-  ctx.font = '700 32px Manrope, sans-serif';
-  ctx.fillText('AI HABIT QUEST', W / 2, 110);
+  // Eyebrow
+  ctx.fillStyle = '#9b7dff';
+  ctx.font = '700 38px Manrope, sans-serif';
+  ctx.fillText('AI HABIT QUEST', W / 2, 240);
 
+  // Username
   ctx.fillStyle = '#f5f7fb';
-  ctx.font = '600 48px Manrope, sans-serif';
-  ctx.fillText(user.firstName || user.username || '·', W / 2, 200);
+  ctx.font = '600 56px Manrope, sans-serif';
+  ctx.fillText(user.firstName || user.username || '·', W / 2, 360);
 
+  // Rank — shimmer
   const rankGrad = ctx.createLinearGradient(0, 0, W, 0);
   rankGrad.addColorStop(0, '#f5f7fb');
   rankGrad.addColorStop(0.5, '#c4a6ff');
   rankGrad.addColorStop(1, '#f5f7fb');
   ctx.fillStyle = rankGrad;
-  ctx.font = '800 120px Manrope, sans-serif';
-  ctx.fillText(rankName, W / 2, 360);
+  ctx.font = '800 152px Manrope, sans-serif';
+  ctx.fillText(rankName, W / 2, 600);
 
-  ctx.fillStyle = '#7c5cff';
-  ctx.font = '600 36px Manrope, sans-serif';
-  ctx.fillText(`${lang === 'en' ? 'Level' : 'Уровень'} ${user.level}`, W / 2, 440);
+  // Level chip
+  drawChip(ctx, W / 2, 740, `${lang === 'en' ? 'Level' : 'Уровень'} ${user.level}`);
 
-  const yStat = 700;
+  // HUD stats — three big columns centred vertically
+  const yStat = H / 2 + 180;
   drawStat(ctx, W * 0.18, yStat, '🔥', String(user.streak.current), lang === 'en' ? 'STREAK' : 'СЕРИЯ');
   drawStat(ctx, W * 0.50, yStat, '⚡', String(user.xpTotal), 'XP');
   drawStat(ctx, W * 0.82, yStat, '🏆', String(user.streak.best), lang === 'en' ? 'BEST' : 'РЕКОРД');
 
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '500 28px Manrope, sans-serif';
+  // Bottom CTA
+  ctx.fillStyle = 'rgba(255,255,255,0.65)';
+  ctx.font = '500 32px Manrope, sans-serif';
   ctx.fillText(
-    lang === 'en' ? 'Build habits with AI · @AI_Habit_Tracking_bot' : 'Привычки с AI · @AI_Habit_Tracking_bot',
+    lang === 'en' ? 'Build habits with AI' : 'Привычки с AI',
     W / 2,
-    H - 120,
+    H - 220,
   );
+  ctx.fillStyle = '#9b7dff';
+  ctx.font = '700 34px Manrope, sans-serif';
+  ctx.fillText('@AI_Habit_Tracking_bot', W / 2, H - 170);
 
+  // Accent divider
   ctx.strokeStyle = '#7c5cff';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(W * 0.3, H - 80);
-  ctx.lineTo(W * 0.7, H - 80);
+  ctx.moveTo(W * 0.35, H - 110);
+  ctx.lineTo(W * 0.65, H - 110);
   ctx.stroke();
+}
+
+function drawChip(ctx: CanvasRenderingContext2D, cx: number, cy: number, text: string): void {
+  ctx.font = '700 36px Manrope, sans-serif';
+  const m = ctx.measureText(text);
+  const padX = 32;
+  const w = m.width + padX * 2;
+  const h = 64;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.fillStyle = 'rgba(124,92,255,0.18)';
+  ctx.strokeStyle = 'rgba(124,92,255,0.5)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, x, y, w, h, 999);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#c4a6ff';
+  ctx.fillText(text, cx, cy);
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
 }
 
 function drawStat(
