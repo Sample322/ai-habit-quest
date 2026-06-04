@@ -203,6 +203,52 @@ export class GoalsService {
   }
 
   /**
+   * Y: edit goal title (and optionally category). If the title changed, kick
+   * off a plan regeneration — the AI tasks have to match the new objective,
+   * otherwise users would see "do 5km run" tasks under a goal renamed to
+   * "Learn Italian".
+   */
+  async updateGoal(
+    goalId: string,
+    userId: string,
+    input: { title?: string; category?: GoalCategory },
+  ): Promise<GoalView & { plan: unknown }> {
+    const goal = await this.findGoalOrThrow(goalId, userId);
+    const newTitle = input.title?.trim();
+    const newCategory = input.category;
+
+    const titleChanged = newTitle && newTitle !== goal.title;
+    const categoryChanged = newCategory && newCategory !== goal.category;
+
+    if (!titleChanged && !categoryChanged) {
+      return this.findById(goalId, userId);
+    }
+    if (newTitle && newTitle.length < 2) {
+      throw new BadRequestException('Goal title is too short');
+    }
+
+    await this.prisma.goal.update({
+      where: { id: goalId },
+      data: {
+        ...(newTitle ? { title: newTitle } : {}),
+        ...(newCategory ? { category: newCategory } : {}),
+      },
+    });
+
+    // Title or category changed → regenerate plan so habits + tasks match.
+    if (titleChanged || categoryChanged) {
+      try {
+        await this.regeneratePlan(goalId, userId);
+      } catch (err) {
+        this.logger.warn(
+          `Plan regen failed after edit for goal=${goalId}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return this.findById(goalId, userId);
+  }
+
+  /**
    * Regenerate the AI plan for an existing goal (e.g. when the first attempt
    * fell back to the stub). Replaces the plan + habits, re-materialises today's
    * tasks, and recomputes gamification so XP/streak stay consistent after the

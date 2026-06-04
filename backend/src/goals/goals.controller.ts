@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { GoalCategory } from '@prisma/client';
 
 import { JwtAuthGuard, CurrentUser } from '../auth/jwt-auth.guard';
@@ -13,6 +13,14 @@ class CreateGoalDto {
 
   @IsEnum(GoalCategory)
   category!: GoalCategory;
+}
+
+class UpdateGoalDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
+  title?: string;
+
+  @IsOptional() @IsEnum(GoalCategory)
+  category?: GoalCategory;
 }
 
 @UseGuards(JwtAuthGuard)
@@ -48,6 +56,16 @@ export class GoalsController {
       throw new ForbiddenException({ code: 'premium_required', message: 'Regenerating the plan is a Premium feature.' });
     }
     return this.goals.regeneratePlan(id, me.id);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Patch(':id')
+  update(
+    @CurrentUser() me: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: UpdateGoalDto,
+  ) {
+    return this.goals.updateGoal(id, me.id, body);
   }
 
   @Get(':id/insights')

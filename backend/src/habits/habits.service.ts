@@ -3,16 +3,21 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { TasksService } from '../tasks/tasks.service';
 
 @Injectable()
 export class HabitsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    @Inject(forwardRef(() => TasksService))
+    private readonly tasks: TasksService,
   ) {}
 
   async listForGoal(userId: string, goalId: string) {
@@ -41,7 +46,7 @@ export class HabitsService {
       });
     }
 
-    return this.prisma.habit.create({
+    const created = await this.prisma.habit.create({
       data: {
         userId,
         goalId,
@@ -49,6 +54,15 @@ export class HabitsService {
         position: count,
       },
     });
+    // Z: materialise today's tasks immediately so the new habit appears on the
+    // Today screen without a reload (idempotent via the (habitId, localDate)
+    // unique constraint).
+    try {
+      await this.tasks.materialiseTodayForUser(userId);
+    } catch {
+      /* best-effort */
+    }
+    return created;
   }
 
   async remove(userId: string, habitId: string) {

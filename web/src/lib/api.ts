@@ -82,6 +82,18 @@ export const api = {
   regeneratePlan: (goalId: string, signal?: AbortSignal) =>
     request<Goal>(`/goals/${goalId}/regenerate-plan`, { method: 'POST', signal }),
 
+  updateGoal: (goalId: string, patch: { title?: string; category?: GoalCategory }, signal?: AbortSignal) =>
+    request<Goal>(`/goals/${goalId}`, { method: 'PATCH', body: JSON.stringify(patch), signal }),
+
+  addHabit: (goalId: string, title: string) =>
+    request<{ id: string; title: string; position: number; goalId: string }>(
+      `/goals/${goalId}/habits`,
+      { method: 'POST', body: JSON.stringify({ title }) },
+    ),
+
+  removeHabit: (habitId: string) =>
+    request<{ ok: true }>(`/habits/${habitId}`, { method: 'DELETE' }),
+
   previewDeleteGoal: (id: string) =>
     request<{
       goalId: string;

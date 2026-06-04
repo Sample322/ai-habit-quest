@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check } from 'lucide-react';
+import { Sparkles, Plus, Crown, RefreshCw, Trash2, LayoutDashboard, Check, Pencil } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -21,6 +21,7 @@ interface TodayProps {
   onPremiumClick: () => void;
   onAddGoal: () => void;
   onDeleteGoal: (goalId: string, goalTitle: string) => void;
+  onEditGoal: (goalId: string) => void;
 }
 
 interface GoalGroup {
@@ -41,6 +42,7 @@ export function Today({
   onPremiumClick,
   onAddGoal,
   onDeleteGoal,
+  onEditGoal,
 }: TodayProps) {
   const i = t(lang);
   const [tasks, setTasks] = useState<DailyTask[] | null>(null);
@@ -195,6 +197,7 @@ export function Today({
               group={group}
               onToggle={toggle}
               onDelete={() => onDeleteGoal(group.goalId, group.goalTitle)}
+              onEdit={() => onEditGoal(group.goalId)}
               onRegenerate={() => regenerate(group.goalId)}
               onInsights={() => setInsightsGoalId(group.goalId)}
               regenerating={regenGoalId === group.goalId}
@@ -354,6 +357,7 @@ function GoalSection({
   group,
   onToggle,
   onDelete,
+  onEdit,
   onRegenerate,
   onInsights,
   regenerating,
@@ -364,6 +368,7 @@ function GoalSection({
   group: GoalGroup;
   onToggle: (id: string) => void;
   onDelete: () => void;
+  onEdit: () => void;
   onRegenerate: () => void;
   onInsights: () => void;
   regenerating: boolean;
@@ -387,6 +392,9 @@ function GoalSection({
         <div className="text-xs text-muted tabular shrink-0 pl-2">
           {group.done}/{group.total}
         </div>
+        <IconAction onClick={onEdit} label={i.goalEdit.iconLabel}>
+          <Pencil size={13} />
+        </IconAction>
         <IconAction onClick={onInsights} label="Insights">
           <LayoutDashboard size={13} />
         </IconAction>

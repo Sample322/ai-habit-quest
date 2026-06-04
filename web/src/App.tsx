@@ -16,6 +16,7 @@ import { NumberTicker } from './components/ui/NumberTicker';
 import { AvatarFrame } from './components/ui/AvatarFrame';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TutorialOverlay, shouldShowTutorial } from './components/TutorialOverlay';
+import { GoalEditModal } from './components/GoalEditModal';
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -33,6 +34,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   // Derive `lang` from the user so any `setUser(...)` (settings sheet, etc.)
@@ -175,6 +177,7 @@ export function App() {
           onPremiumClick={() => setSubscriptionOpen(true)}
           onAddGoal={() => setGoalCreatorOpen(true)}
           onDeleteGoal={(id, title) => setDeletingGoal({ id, title })}
+          onEditGoal={(id) => setEditingGoalId(id)}
         />
       )}
 
@@ -234,6 +237,22 @@ export function App() {
       {tutorialOpen && (
         <TutorialOverlay lang={lang} onClose={() => setTutorialOpen(false)} />
       )}
+
+      {editingGoalId && (() => {
+        const target = (goals ?? []).find((g) => g.id === editingGoalId);
+        if (!target) return null;
+        return (
+          <GoalEditModal
+            lang={lang}
+            goal={target}
+            onClose={() => setEditingGoalId(null)}
+            onChanged={async () => {
+              await refreshGoals();
+              setTodayRefreshKey((k) => k + 1);
+            }}
+          />
+        );
+      })()}
 
       {deletingGoal && (
         <ConfirmDeleteGoalModal
