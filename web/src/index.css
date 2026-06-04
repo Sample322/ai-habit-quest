@@ -96,7 +96,11 @@ textarea:-webkit-autofill {
  * modals).  Without this the header (avatar + name + chips) sits underneath
  * the Telegram close button. */
 .app-safe-top {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+  /* 88px baseline absorbs Telegram's full-width close-button strip on
+   * mobile (status bar ~30px + TG header ~44px + slack). The iOS notch
+   * adds its own env(safe-area-inset-top) on top so notched devices push
+   * further down automatically. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 88px);
 }
 .app-safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6rem);
