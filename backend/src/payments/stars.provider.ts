@@ -72,4 +72,70 @@ export class TelegramStarsProvider {
     }
     return { invoiceLink: res.data.result as string, payload: invoice.payload };
   }
+
+  /**
+   * Card-payment invoice via Telegram Bot Payments. The provider_token comes
+   * from BotFather → bot → Payments → selected provider (e.g. ЮKassa).
+   * Currency=RUB, amount in kopecks. Telegram routes the payment through the
+   * provider; we get a successful_payment update via the bot webhook.
+   */
+  async createCardInvoiceLink(invoice: {
+    title: string;
+    description: string;
+    payload: string;
+    amountRub: number;
+  }): Promise<StarsInvoiceResult> {
+    const token = envString('TELEGRAM_BOT_TOKEN', '');
+    const providerToken = envString('YOOKASSA_PROVIDER_TOKEN', '');
+    if (!token || !providerToken) {
+      this.logger.warn('Card payments disabled — no bot token or provider token');
+      return {
+        invoiceLink: `tg://mock-card-invoice?payload=${encodeURIComponent(invoice.payload)}`,
+        payload: invoice.payload,
+      };
+    }
+
+    const apiRoot = (envString('TELEGRAM_API_ROOT', '') || 'https://api.telegram.org').replace(/\/+$/, '');
+    let res;
+    try {
+      res = await axios.post(
+        `${apiRoot}/bot${token}/createInvoiceLink`,
+        {
+          title: invoice.title,
+          description: invoice.description,
+          payload: invoice.payload,
+          provider_token: providerToken,
+          currency: 'RUB',
+          // YooKassa requires the receipt object for digital goods; pass it
+          // via provider_data so Telegram forwards it to the provider.
+          provider_data: JSON.stringify({
+            receipt: {
+              items: [
+                {
+                  description: 'AI Habit Quest Premium · 1 month',
+                  quantity: '1.00',
+                  amount: { value: invoice.amountRub.toFixed(2), currency: 'RUB' },
+                  vat_code: 1, // VAT-free / no VAT
+                },
+              ],
+            },
+          }),
+          prices: [{ label: invoice.title, amount: invoice.amountRub * 100 }],
+        },
+        { timeout: 15_000 },
+      );
+    } catch (err) {
+      const e = err as { code?: string; message?: string; response?: { data?: unknown } };
+      this.logger.error(
+        `createCardInvoiceLink request failed: code=${e.code} msg=${e.message} body=${JSON.stringify(e.response?.data)}`,
+      );
+      throw new Error(`Telegram createCardInvoiceLink failed: ${e.message ?? 'request error'}`);
+    }
+
+    if (!res.data?.ok) {
+      this.logger.error(`createCardInvoiceLink !ok: ${JSON.stringify(res.data)}`);
+      throw new Error(`createCardInvoiceLink failed: ${JSON.stringify(res.data)}`);
+    }
+    return { invoiceLink: res.data.result as string, payload: invoice.payload };
+  }
 }

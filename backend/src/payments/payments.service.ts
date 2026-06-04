@@ -65,6 +65,22 @@ export class PaymentsService {
   }
 
   /**
+   * Create a card-payment invoice link via Telegram Bot Payments. Uses a
+   * BotFather-issued provider token (ЮKassa/etc.) — payment happens inside
+   * Telegram's UI without a browser redirect. Client receives a t.me/$...
+   * link and opens it through Telegram.WebApp.openInvoice.
+   */
+  async createCardInvoice(userId: string) {
+    const result = await this.stars.createCardInvoiceLink({
+      title: 'AI Habit Quest Premium',
+      description: '1 месяц Premium: безлимит целей, 30-дневный AI-план, восстановление серии, ежедневный AI-бонус.',
+      payload: `premium-card:${userId}:${Date.now()}`,
+      amountRub: MONTH_PRICE_RUB,
+    });
+    return result;
+  }
+
+  /**
    * Free 3-day trial — claimable exactly once per account, no payment needed.
    * Grants Premium immediately and timestamps the claim so the user can never
    * use it again. The notifications scheduler picks up the expiry to send a
@@ -234,5 +250,62 @@ export class PaymentsService {
       monthlyPriceRub: MONTH_PRICE_RUB,
       premiumStars: PREMIUM_STARS,
     };
+  }
+
+  /**
+   * Apply a successful Telegram Bot Payments (card / RUB) charge. Idempotent
+   * via the provider_payment_charge_id from Telegram.
+   */
+  async handleCardSuccessFromBot(input: {
+    telegramId: bigint;
+    invoicePayload: string;
+    amountMinor: number; // kopecks
+    currency: string;
+    telegramPaymentChargeId: string;
+    providerPaymentChargeId: string;
+  }): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { telegramId: input.telegramId } });
+    if (!user) {
+      this.logger.warn(`Card payment for unknown telegramId=${input.telegramId}`);
+      return;
+    }
+    const existing = await this.prisma.paymentEvent.findFirst({
+      where: { externalId: input.providerPaymentChargeId, provider: SubscriptionProvider.yookassa },
+    });
+    if (existing) {
+      this.logger.log(`Card payment ${input.providerPaymentChargeId} already processed`);
+      return;
+    }
+
+    const periodEnd = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction([
+      this.prisma.paymentEvent.create({
+        data: {
+          userId: user.id,
+          provider: SubscriptionProvider.yookassa,
+          externalId: input.providerPaymentChargeId,
+          amountMinor: input.amountMinor,
+          currency: input.currency,
+          status: PaymentEventStatus.succeeded,
+          rawPayload: input as unknown as object,
+        },
+      }),
+      this.prisma.subscription.create({
+        data: {
+          userId: user.id,
+          provider: SubscriptionProvider.yookassa,
+          status: SubscriptionStatus.active,
+          externalId: input.providerPaymentChargeId,
+          currentPeriodEnd: periodEnd,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { isPremium: true, premiumUntil: periodEnd },
+      }),
+    ]);
+    this.logger.log(
+      `Card payment applied user=${user.id} amount=${input.amountMinor / 100} ${input.currency}`,
+    );
   }
 }

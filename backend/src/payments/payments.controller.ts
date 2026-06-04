@@ -31,6 +31,12 @@ export class PaymentsController {
     return this.payments.claimFreeTrial(me.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('card/invoice')
+  async cardInvoice(@CurrentUser() me: AuthenticatedUser) {
+    return this.payments.createCardInvoice(me.id);
+  }
+
   @Post('yookassa/webhook')
   async yooKassaWebhook(@Body() body: Record<string, unknown>) {
     return this.payments.handleYooKassaWebhook(body);

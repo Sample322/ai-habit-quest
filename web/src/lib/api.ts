@@ -144,6 +144,9 @@ export const api = {
       { method: 'POST' },
     ),
 
+  cardInvoice: () =>
+    request<{ invoiceLink: string; payload: string }>('/payments/card/invoice', { method: 'POST' }),
+
   // --- In-app admin (only works for admin Telegram IDs) ---
   adminStats: () => request<AdminStats>('/app-admin/stats'),
   adminUsers: (q?: string) =>

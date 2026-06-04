@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Crown, Check, X, Infinity as InfinityIcon, CreditCard, Gift } from 'lucide-react';
 
 import { api } from '../lib/api';
+import { openInvoice } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { User } from '../lib/types';
 
@@ -79,11 +80,9 @@ interface UpgradeSubscriptionProps {
 }
 
 function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSubscriptionProps): JSX.Element {
-  // Stars payment surface is intentionally hidden — Telegram restricts the
-  // @PremiumBot top-up route for most bots right now, so the button would
-  // dead-end most users. Backend endpoint (POST /payments/stars/invoice)
-  // stays wired up; re-add the UI once demand justifies the friction.
-  const [busy, setBusy] = useState<'trial' | null>(null);
+  // Stars surface is hidden by default — Telegram restricts the @PremiumBot
+  // top-up route for most bots. Backend endpoint still works.
+  const [busy, setBusy] = useState<'trial' | 'card' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -100,6 +99,26 @@ function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSub
       if (code === 'trial_already_used') setError(i.subscription.freeTrialUsed);
       else setError(err instanceof Error ? err.message : i.errors.generic);
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function payCard(): Promise<void> {
+    setBusy('card');
+    setError(null);
+    const timer = setTimeout(() => {
+      setBusy((b) => (b === 'card' ? null : b));
+      setError(i.errors.generic);
+    }, 20_000);
+    try {
+      const { invoiceLink } = await api.cardInvoice();
+      openInvoice(invoiceLink, async (status) => {
+        if (status === 'paid') await onActivated();
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : i.errors.generic);
+    } finally {
+      clearTimeout(timer);
       setBusy(null);
     }
   }
@@ -144,14 +163,20 @@ function UpgradeSubscription({ lang, i, user, onClose, onActivated }: UpgradeSub
           </div>
         )}
 
-        {/* Paid subscription — coming soon (YooKassa pending approval) */}
-        <div className="rounded-pill border border-hairline bg-white/[0.02] py-3 px-5 text-center text-sm text-muted flex items-center justify-center gap-2">
-          <CreditCard size={14} className="opacity-60" />
-          <span>{i.subscription.payCard}</span>
-          <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-pill bg-white/10 text-muted">
-            {i.subscription.payMethodCardSoon}
-          </span>
-        </div>
+        {/* Paid card subscription — Telegram Bot Payments via ЮKassa provider */}
+        <button
+          onClick={payCard}
+          disabled={busy !== null}
+          className="btn-ghost flex items-center justify-center gap-2"
+        >
+          <CreditCard size={14} className="text-accent" />
+          {busy === 'card' ? '…' : (
+            <span>
+              {i.subscription.payCard}
+              <span className="opacity-70 ml-1.5 text-xs font-normal">· 299 ₽/мес</span>
+            </span>
+          )}
+        </button>
       </div>
 
       {info && (

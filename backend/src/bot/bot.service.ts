@@ -120,16 +120,30 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
       const telegramId = ctx.from?.id;
       if (!pay || !telegramId) return;
       this.logger.log(
-        `Stars payment: chat=${telegramId} amount=${pay.total_amount} ${pay.currency} payload=${pay.invoice_payload}`,
+        `Payment: chat=${telegramId} amount=${pay.total_amount} ${pay.currency} payload=${pay.invoice_payload}`,
       );
       try {
-        await this.payments.handleStarsSuccessFromBot({
-          telegramId: BigInt(telegramId),
-          invoicePayload: pay.invoice_payload,
-          stars: pay.total_amount,
-          currency: pay.currency,
-          telegramPaymentChargeId: pay.telegram_payment_charge_id,
-        });
+        // Route by currency: XTR → Stars handler, RUB (and others via card) →
+        // card handler. Both upgrade the user; we keep separate paths for
+        // analytics + provider-specific charge metadata.
+        if (pay.currency === 'XTR') {
+          await this.payments.handleStarsSuccessFromBot({
+            telegramId: BigInt(telegramId),
+            invoicePayload: pay.invoice_payload,
+            stars: pay.total_amount,
+            currency: pay.currency,
+            telegramPaymentChargeId: pay.telegram_payment_charge_id,
+          });
+        } else {
+          await this.payments.handleCardSuccessFromBot({
+            telegramId: BigInt(telegramId),
+            invoicePayload: pay.invoice_payload,
+            amountMinor: pay.total_amount,
+            currency: pay.currency,
+            telegramPaymentChargeId: pay.telegram_payment_charge_id,
+            providerPaymentChargeId: pay.provider_payment_charge_id,
+          });
+        }
         const isRu = ctx.from?.language_code?.startsWith('ru');
         await ctx.reply(
           isRu
@@ -137,7 +151,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
             : '🎉 Premium activated. Open the Mini App — unlimited goals, 30-day AI plans and advanced stats are now yours.',
         );
       } catch (err) {
-        this.logger.error(`Failed to apply Stars payment: ${(err as Error).message}`);
+        this.logger.error(`Failed to apply payment: ${(err as Error).message}`);
         await ctx.reply(
           'Платёж получен, но активация Premium не сработала. Напиши /feedback — разберёмся.',
         );
