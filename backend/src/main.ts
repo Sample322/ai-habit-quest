@@ -6,13 +6,16 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false });
-
-  // Share endpoint accepts base64-encoded PNGs (capped at ~800kB after
-  // decode in the controller). Lift the default 100kB body limit so the
-  // upload doesn't trip PayloadTooLarge before validation runs.
-  app.use(json({ limit: '1500kb' }));
-  app.use(urlencoded({ limit: '1500kb', extended: true }));
+  // bodyParser: false disables Nest's built-in 100kB express.json/urlencoded
+  // so we can mount our own with a larger limit (share endpoint accepts
+  // base64-encoded PNGs, validated/capped at 800kB after decode in the
+  // controller — JSON-encoded body can hit ~1.2MB).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: false,
+    bodyParser: false,
+  });
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ limit: '2mb', extended: true }));
 
   // Behind Timeweb's Caddy reverse proxy: trust the first hop so `req.ip`
   // resolves to the real client (via X-Forwarded-For) — required for per-client
