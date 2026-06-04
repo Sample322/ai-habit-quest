@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Flame, Zap, Settings, X, Wrench } from 'lucide-react';
 
 import { api, setToken } from './lib/api';
@@ -8,16 +8,19 @@ import type { Goal, User } from './lib/types';
 import { Onboarding } from './screens/Onboarding';
 import { Today } from './screens/Today';
 import { Progress } from './screens/Progress';
-import { Subscription } from './screens/Subscription';
-import { Admin } from './screens/Admin';
 import { BottomNav, type Tab } from './components/BottomNav';
-import { ConfirmDeleteGoalModal } from './components/ConfirmDeleteGoalModal';
 import { NumberTicker } from './components/ui/NumberTicker';
 import { AvatarFrame } from './components/ui/AvatarFrame';
 import { SettingsSheet } from './components/SettingsSheet';
 import { TutorialOverlay, shouldShowTutorial } from './components/TutorialOverlay';
 import { GoalEditModal } from './components/GoalEditModal';
 import { track } from './lib/analytics';
+
+// EE: lazy-load rarely-opened screens / modals. These are imported only when
+// the user actually triggers them — keeps the initial JS bundle lean.
+const Subscription = lazy(() => import('./screens/Subscription').then((m) => ({ default: m.Subscription })));
+const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
+const ConfirmDeleteGoalModal = lazy(() => import('./components/ConfirmDeleteGoalModal').then((m) => ({ default: m.ConfirmDeleteGoalModal })));
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -157,7 +160,11 @@ export function App() {
             await refreshGoals();
           }}
         />
-        {adminOpen && <Admin onClose={() => setAdminOpen(false)} />}
+        {adminOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-bg" />}>
+          <Admin onClose={() => setAdminOpen(false)} />
+        </Suspense>
+      )}
       </div>
     );
   }
@@ -200,15 +207,17 @@ export function App() {
       }} />
 
       {subscriptionOpen && (
-        <Subscription
-          lang={lang}
-          user={user}
-          onClose={() => setSubscriptionOpen(false)}
-          onActivated={async () => {
-            setSubscriptionOpen(false);
-            await refreshUser();
-          }}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md" />}>
+          <Subscription
+            lang={lang}
+            user={user}
+            onClose={() => setSubscriptionOpen(false)}
+            onActivated={async () => {
+              setSubscriptionOpen(false);
+              await refreshUser();
+            }}
+          />
+        </Suspense>
       )}
 
       {goalCreatorOpen && (
@@ -228,7 +237,11 @@ export function App() {
         />
       )}
 
-      {adminOpen && <Admin onClose={() => setAdminOpen(false)} />}
+      {adminOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-bg" />}>
+          <Admin onClose={() => setAdminOpen(false)} />
+        </Suspense>
+      )}
 
       {settingsOpen && (
         <SettingsSheet
@@ -260,20 +273,22 @@ export function App() {
       })()}
 
       {deletingGoal && (
-        <ConfirmDeleteGoalModal
-          lang={lang}
-          goalId={deletingGoal.id}
-          goalTitle={deletingGoal.title}
-          onClose={() => setDeletingGoal(null)}
-          onDeleted={async (xpLost, goalTitle) => {
-            setDeletingGoal(null);
-            await refreshUser();
-            await refreshGoals();
-            const tpl = i.deleteGoal.toastDeleted;
-            setToast(tpl.replace('{title}', goalTitle).replace('{xp}', String(xpLost)));
-            setTimeout(() => setToast(null), 4000);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ConfirmDeleteGoalModal
+            lang={lang}
+            goalId={deletingGoal.id}
+            goalTitle={deletingGoal.title}
+            onClose={() => setDeletingGoal(null)}
+            onDeleted={async (xpLost, goalTitle) => {
+              setDeletingGoal(null);
+              await refreshUser();
+              await refreshGoals();
+              const tpl = i.deleteGoal.toastDeleted;
+              setToast(tpl.replace('{title}', goalTitle).replace('{xp}', String(xpLost)));
+              setTimeout(() => setToast(null), 4000);
+            }}
+          />
+        </Suspense>
       )}
 
       {toast && (
