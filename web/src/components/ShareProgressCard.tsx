@@ -55,9 +55,17 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
 
   async function uploadDataUrl(): Promise<string | null> {
     if (!dataUrl) return null;
+    // Hard 20s timeout — Telegram WebView occasionally drops fetch promises
+    // silently on slow connections; we'd rather show an error than freeze
+    // the buttons forever.
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 20_000));
     try {
-      const { url } = await api.uploadShare(dataUrl);
-      return url;
+      const result = await Promise.race([
+        api.uploadShare(dataUrl).then((r) => r.url).catch(() => null),
+        timeout,
+      ]);
+      if (!result) { notify('error'); showInfo(i.errors.generic); return null; }
+      return result;
     } catch {
       notify('error');
       return null;
@@ -86,30 +94,17 @@ export function ShareProgressCard({ lang, user, rankName, onClose }: Props) {
     setBusy('chat');
     haptic('light');
     try {
-      // Try Web Share API with the actual PNG file first — works in
-      // modern WebViews + iOS Telegram; picks the chat picker with the image.
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], `ahq-progress.png`, { type: 'image/png' });
-      const navWithShare = navigator as Navigator & {
-        canShare?: (data: { files?: File[] }) => boolean;
-        share?: (data: { files?: File[]; text?: string }) => Promise<void>;
-      };
-      if (navWithShare.canShare?.({ files: [file] }) && navWithShare.share) {
-        await navWithShare.share({
-          files: [file],
-          text: `${rankName} · ${user.streak.current}🔥 · ${user.xpTotal} XP — AI Habit Quest`,
-        });
-        notify('success');
-        return;
-      }
-      // Fallback: upload + open Telegram's "share image URL" sheet.
+      // Upload the PNG to the backend → get a public URL. We share that URL
+      // in a Telegram chat, Telegram unfurls the image inline as a preview.
+      // We deliberately do NOT call navigator.share / fetch(data:URL) — both
+      // hang inside Telegram WebView.
       const url = await uploadDataUrl();
       if (!url) return;
       const text = lang === 'en'
-        ? `🏆 ${rankName} · 🔥 ${user.streak.current}d · ⚡ ${user.xpTotal} XP\n${url}`
-        : `🏆 ${rankName} · 🔥 ${user.streak.current}д · ⚡ ${user.xpTotal} XP\n${url}`;
-      const ref = `https://t.me/${BOT_USERNAME}?startapp=ref_${user.referralCode}`;
-      shareUrl(ref, text);
+        ? `🏆 ${rankName} · 🔥 ${user.streak.current}d · ⚡ ${user.xpTotal} XP`
+        : `🏆 ${rankName} · 🔥 ${user.streak.current}д · ⚡ ${user.xpTotal} XP`;
+      // Share the image URL itself; Telegram auto-previews image/png URLs.
+      shareUrl(url, text);
       notify('success');
     } catch {
       notify('error');
