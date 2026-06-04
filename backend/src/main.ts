@@ -14,8 +14,8 @@ async function bootstrap() {
     bufferLogs: false,
     bodyParser: false,
   });
-  app.use(json({ limit: '2mb' }));
-  app.use(urlencoded({ limit: '2mb', extended: true }));
+  app.use(json({ limit: '3mb' }));
+  app.use(urlencoded({ limit: '3mb', extended: true }));
 
   // Behind Timeweb's Caddy reverse proxy: trust the first hop so `req.ip`
   // resolves to the real client (via X-Forwarded-For) — required for per-client
