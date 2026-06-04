@@ -19,6 +19,9 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  /** TG 8.0+: ask the client to drop the sheet chrome and use the full screen. */
+  requestFullscreen?: () => void;
+  isFullscreen?: boolean;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   setBottomBarColor?: (color: string) => void;
@@ -64,6 +67,11 @@ export function ready(): void {
   if (!tg) return;
   tg.ready();
   tg.expand();
+  // TG 8.0+: drop the inline-sheet chrome (close/drag/menu strip) by going
+  // fullscreen. When the Mini App was opened via the menu button it's
+  // already fullscreen — call is a no-op. On older clients the method is
+  // undefined; fail soft.
+  try { tg.requestFullscreen?.(); } catch { /* ignore */ }
   // Force Telegram's surrounding chrome to our dark palette regardless of
   // the user's TG theme. Older clients may not have these methods — fail
   // soft.
