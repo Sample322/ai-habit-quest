@@ -21,6 +21,7 @@ import { track } from './lib/analytics';
 const Subscription = lazy(() => import('./screens/Subscription').then((m) => ({ default: m.Subscription })));
 const Admin = lazy(() => import('./screens/Admin').then((m) => ({ default: m.Admin })));
 const ConfirmDeleteGoalModal = lazy(() => import('./components/ConfirmDeleteGoalModal').then((m) => ({ default: m.ConfirmDeleteGoalModal })));
+const AchievementGallery = lazy(() => import('./screens/AchievementGallery').then((m) => ({ default: m.AchievementGallery })));
 
 type Status = 'idle' | 'authenticating' | 'ready' | 'auth_failed';
 
@@ -37,6 +38,7 @@ export function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [deletingGoal, setDeletingGoal] = useState<{ id: string; title: string } | null>(null);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -198,6 +200,7 @@ export function App() {
           user={user}
           onUserChange={(u) => setUser(u)}
           onPremiumClick={() => setSubscriptionOpen(true)}
+          onOpenGallery={() => setGalleryOpen(true)}
         />
       )}
 
@@ -254,6 +257,17 @@ export function App() {
 
       {tutorialOpen && (
         <TutorialOverlay lang={lang} onClose={() => setTutorialOpen(false)} />
+      )}
+
+      {galleryOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-bg" />}>
+          <AchievementGallery
+            lang={lang}
+            user={user}
+            onClose={() => setGalleryOpen(false)}
+            onUserChange={(u) => setUser(u)}
+          />
+        </Suspense>
       )}
 
       {editingGoalId && (() => {

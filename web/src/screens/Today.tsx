@@ -12,6 +12,7 @@ import { NumberTicker } from '../components/ui/NumberTicker';
 import { Confetti } from '../components/ui/Confetti';
 import { quoteOfDay } from '../lib/quotes';
 import { track } from '../lib/analytics';
+import { MILESTONE_STREAKS, StreakMilestone } from '../components/StreakMilestone';
 
 interface TodayProps {
   lang: Lang;
@@ -56,6 +57,7 @@ export function Today({
   const [toast, setToast] = useState<string | null>(null);
   const [insightsGoalId, setInsightsGoalId] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(false);
+  const [milestoneStreak, setMilestoneStreak] = useState<number | null>(null);
   // Avoid re-firing confetti on every render when overall already at 100%.
   const lastCelebrationKey = useRef<string | null>(null);
 
@@ -120,6 +122,14 @@ export function Today({
     haptic('light');
     try {
       const { task, user: snap, newAchievements } = await api.toggleTask(id);
+      // QQ: full-screen milestone when a streak crosses 7/30/100. Only on
+      // marking a task done (not undo) AND only when the new value exceeds
+      // the previous one — prevents repeats when bouncing tasks the same day.
+      const prevStreak = user.streak.current;
+      if (task.doneAt && snap.streakCurrent > prevStreak && (MILESTONE_STREAKS as readonly number[]).includes(snap.streakCurrent)) {
+        setMilestoneStreak(snap.streakCurrent);
+        track('streak_milestone', { value: snap.streakCurrent });
+      }
       setTasks((prev) => prev?.map((t) => (t.id === task.id ? task : t)) ?? null);
       onUserChange({
         ...user,
@@ -263,6 +273,14 @@ export function Today({
       )}
 
       <Confetti active={confetti} />
+
+      {milestoneStreak !== null && (
+        <StreakMilestone
+          lang={lang}
+          streak={milestoneStreak}
+          onClose={() => setMilestoneStreak(null)}
+        />
+      )}
     </div>
   );
 }

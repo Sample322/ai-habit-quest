@@ -26,6 +26,8 @@ export interface User {
   isAdmin: boolean;
   premiumUntil: string | null;
   hasUsedTrial: boolean;
+  showcase: string[];
+  aiCoachingStyle: 'gentle' | 'strict' | 'humor' | null;
   streak: { current: number; best: number; freezesLeft: number };
   xpTotal: number;
   level: number;
@@ -56,6 +58,10 @@ export interface Habit {
   goalId: string;
   title: string;
   position: number;
+  scheduleMask?: number;
+  reminderEnabled?: boolean;
+  reminderHour?: number | null;
+  reminderMinute?: number | null;
 }
 
 export interface Goal {

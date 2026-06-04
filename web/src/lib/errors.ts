@@ -43,6 +43,10 @@ export function reportError(err: unknown, ctx?: Record<string, unknown>): void {
     release: RELEASE,
     context: ctx,
   });
+  // Also push to Sentry when configured. Lazy-imported so the @sentry/react
+  // bundle is only loaded when an error actually fires (combined with the
+  // initSentry no-op when DSN absent, the prod hot path stays cold).
+  void import('./sentry').then(({ captureSentry }) => captureSentry(err, ctx)).catch(() => { /* swallow */ });
 }
 
 /**

@@ -69,6 +69,8 @@ export const api = {
     notifSeasons: boolean;
     notifStreakBreak: boolean;
     notifWeeklyRecap: boolean;
+    showcaseAchievements: string[];
+    aiCoachingStyle: 'gentle' | 'strict' | 'humor' | null;
   }>) =>
     request<User>('/me/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
 
@@ -89,6 +91,18 @@ export const api = {
     request<{ id: string; title: string; position: number; goalId: string }>(
       `/goals/${goalId}/habits`,
       { method: 'POST', body: JSON.stringify({ title }) },
+    ),
+
+  updateHabit: (habitId: string, patch: Partial<{
+    title: string;
+    scheduleMask: number;
+    reminderEnabled: boolean;
+    reminderHour: number | null;
+    reminderMinute: number | null;
+  }>) =>
+    request<{ id: string; title: string; scheduleMask: number; reminderEnabled: boolean; reminderHour: number | null; reminderMinute: number | null }>(
+      `/habits/${habitId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
     ),
 
   removeHabit: (habitId: string) =>

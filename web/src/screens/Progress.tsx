@@ -8,11 +8,12 @@ import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
 import { ShareProgressCard } from '../components/ShareProgressCard';
 
-export function Progress({ lang, user, onUserChange, onPremiumClick }: {
+export function Progress({ lang, user, onUserChange, onPremiumClick, onOpenGallery }: {
   lang: Lang;
   user: User;
   onUserChange: (u: User) => void;
   onPremiumClick: () => void;
+  onOpenGallery: () => void;
 }) {
   const i = t(lang);
   const L = (ru: string, en: string): string => (lang === 'en' ? en : ru);
@@ -172,10 +173,16 @@ export function Progress({ lang, user, onUserChange, onPremiumClick }: {
       <section className="space-y-3">
         <SectionHead title={L('Достижения', 'Achievements')} right={`${earned}/${data.achievements.length}`} />
         <div className="grid grid-cols-2 gap-2.5">
-          {data.achievements.map((a) => (
+          {data.achievements.slice(0, 6).map((a) => (
             <AchievementCard key={a.code} a={a} lang={lang} />
           ))}
         </div>
+        <button
+          onClick={onOpenGallery}
+          className="w-full rounded-pill border border-hairlineStrong bg-white/[0.02] hover:bg-white/[0.05] py-3 px-5 text-sm font-semibold transition active:scale-[0.98] flex items-center justify-center gap-2"
+        >
+          {i.gallery.action} ({data.achievements.length})
+        </button>
       </section>
 
       {/* Season card */}

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Habit Quest — привычки с AI-планом</title>
+    <meta name="description" content="Геймифицированный трекер привычек с AI. Цель → план → задачи. Серии, лиги, сезоны, Premium-коучинг." />
+    <link rel="canonical" href="https://sample322-ai-habit-quest-0676.twc1.net/landing.html" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="theme-color" content="#08090c" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AI Habit Quest" />
+    <meta property="og:description" content="Привычки с AI-планом. Цель → план → задачи. Серии, лиги, сезоны." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:url" content="https://t.me/AI_Habit_Tracking_bot?startapp=open" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <style>
+      :root {
+        --bg: #08090c;
+        --surface: #11131a;
+        --elevated: #181b24;
+        --text: #f5f7fb;
+        --muted: #7c8290;
+        --accent: #7c5cff;
+        --accent2: #9b7dff;
+        --green: #19d57a;
+        --gold: #f3c969;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
+        line-height: 1.55;
+        font-feature-settings: "tnum";
+      }
+      body {
+        background:
+          radial-gradient(60% 70% at 50% 0%, rgba(124,92,255,0.22), transparent 60%),
+          radial-gradient(70% 50% at 100% 100%, rgba(25,213,122,0.10), transparent 50%),
+          var(--bg);
+        background-attachment: fixed;
+        min-height: 100vh;
+      }
+      .wrap { max-width: 980px; margin: 0 auto; padding: 56px 24px 80px; }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      h1 {
+        font-size: clamp(40px, 7vw, 72px);
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        margin: 12px 0 16px;
+      }
+      h1 .shimmer {
+        background: linear-gradient(110deg, #fff 0%, #c4a6ff 30%, #fff 60%, #c4a6ff 90%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      p.lead {
+        font-size: clamp(16px, 2.2vw, 20px);
+        color: rgba(245,247,251,0.75);
+        max-width: 600px;
+        margin: 0 0 36px;
+      }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 28px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 16px;
+        box-shadow: 0 10px 28px -10px rgba(124,92,255,0.7);
+        transition: transform .15s ease, box-shadow .15s ease;
+      }
+      .cta:hover { transform: translateY(-1px); box-shadow: 0 14px 36px -10px rgba(124,92,255,0.85); }
+      .cta:active { transform: translateY(1px); }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        margin-top: 72px;
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0) 50%), var(--elevated);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 20px;
+        padding: 24px 22px;
+      }
+      .card h3 {
+        margin: 16px 0 8px;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .card p { margin: 0; color: rgba(245,247,251,0.65); font-size: 14px; }
+      .ic {
+        width: 40px; height: 40px;
+        border-radius: 999px;
+        display: grid; place-items: center;
+        background: linear-gradient(135deg, rgba(124,92,255,0.3), rgba(124,92,255,0.08));
+        border: 1px solid rgba(124,92,255,0.45);
+        font-size: 18px;
+      }
+
+      .pricing {
+        margin-top: 72px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 60%), var(--elevated);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 24px;
+        padding: 32px;
+      }
+      .pricing h2 { margin: 0 0 8px; }
+      .pricing .row {
+        display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+        margin-top: 20px;
+      }
+      .chip {
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        font-size: 13px;
+        color: rgba(245,247,251,0.85);
+      }
+      .chip strong { color: var(--green); }
+
+      footer {
+        margin-top: 72px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        font-size: 12px;
+        color: rgba(245,247,251,0.45);
+      }
+      footer a { color: rgba(245,247,251,0.75); }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="eyebrow">AI HABIT QUEST</div>
+      <h1>Привычки <span class="shimmer">с AI-планом</span></h1>
+      <p class="lead">
+        Выбираешь цель — AI собирает 30-дневный план из маленьких ежедневных шагов.
+        Закрываешь задания → копишь XP → держишь серию. Прозрачно и без воды.
+      </p>
+      <a class="cta" href="https://t.me/AI_Habit_Tracking_bot?startapp=open">
+        Открыть в Telegram →
+      </a>
+
+      <section class="grid">
+        <div class="card">
+          <div class="ic">🎯</div>
+          <h3>AI собирает план</h3>
+          <p>Цель → 30 дней понятных шагов. Никакого «начни с понедельника»: уже сегодня есть что делать.</p>
+        </div>
+        <div class="card">
+          <div class="ic">🔥</div>
+          <h3>Серии и ачивки</h3>
+          <p>13 достижений + ранги Новичок → Легенда. Premium-восстановление серии — 2 раза в месяц.</p>
+        </div>
+        <div class="card">
+          <div class="ic">🏆</div>
+          <h3>Лиги и сезоны</h3>
+          <p>Недельные лиги Бронза → Алмаз и 4-нед сезоны. Топ-10 каждого сезона — +Premium-дни.</p>
+        </div>
+        <div class="card">
+          <div class="ic">🧠</div>
+          <h3>Premium-коучинг</h3>
+          <p>AI подкидывает дополнительное задание в день и в воскресенье шлёт персональный разбор недели.</p>
+        </div>
+      </section>
+
+      <section class="pricing">
+        <div class="eyebrow">PREMIUM</div>
+        <h2>3 дня бесплатно — без карты</h2>
+        <p style="margin:0;color:rgba(245,247,251,0.65);max-width:540px">
+          Активируй пробный прямо в приложении. Дальше — 299 ₽/мес картой,
+          можно отменить когда захочешь.
+        </p>
+        <div class="row">
+          <span class="chip"><strong>+</strong> безлимит целей</span>
+          <span class="chip"><strong>+</strong> AI-план 30 дней + перегенерация</span>
+          <span class="chip"><strong>+</strong> ежедневный AI-бонус</span>
+          <span class="chip"><strong>+</strong> восстановление серии 2×/мес</span>
+          <span class="chip"><strong>+</strong> сезонные награды до +14д</span>
+          <span class="chip"><strong>+</strong> воскресный AI-разбор</span>
+        </div>
+      </section>
+
+      <footer>
+        <a href="/privacy.html">Политика конфиденциальности</a> ·
+        <a href="/terms.html">Условия использования</a> ·
+        Самозанятый Галкин Иван Александрович, ИНН 526223011902 ·
+        <a href="mailto:ivan.galkin13@gmail.com">ivan.galkin13@gmail.com</a>
+      </footer>
+    </main>
+  </body>
+</html>
