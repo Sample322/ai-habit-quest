@@ -96,17 +96,24 @@ textarea:-webkit-autofill {
  * modals).  Without this the header (avatar + name + chips) sits underneath
  * the Telegram close button. */
 .app-safe-top {
-  /* Two stacked insets:
-   *  1. env(safe-area-inset-top) — OS notch / Dynamic Island.
-   *  2. var(--tg-safe-top) — Telegram's reported content/safe-area inset
-   *     for the sheet chrome (close-button + drag-handle + bot strip).
-   *     Pushed in by lib/telegram.ts ONLY when the value is non-zero, so
-   *     the static fallback below applies on TG < 8.0 (no inset events)
-   *     and on inline-button launches that don't fire the event.
-   * The 140px fallback covers the worst observed sheet chrome (~110px on
-   * larger Android phones) plus an 8px breathing room so the app's avatar
-   * row sits cleanly under the close button. */
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-safe-top, 140px) + 8px);
+  /* Layout strategy:
+   *  - In menu-button mode (and on TG Desktop) TG keeps its own header
+   *    strip ABOVE the WebView. WebView content starts below the strip,
+   *    so we don't need any chrome padding — just the OS notch.
+   *  - In inline-button "Открыть приложение" mode TG paints the close +
+   *    drag handle + bot strip OVER the WebView. lib/telegram.ts then
+   *    writes the actual chrome height into --tg-safe-top via TG 8.0+
+   *    contentSafeAreaInset.
+   *  - Pre-8.0 inline launches don't emit the event. They're rare now
+   *    and the chrome is thinner there (~70px), so we keep a small
+   *    conservative fallback rather than padding everyone unnecessarily.
+   *
+   * Result:
+   *  - menu button / desktop: padding = notch + 0 + 8 ≈ notch + 8
+   *  - inline 8.0+: padding = notch + real-chrome + 8
+   *  - inline pre-8.0: padding = notch + 24 + 8 (visible but acceptable)
+   */
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-safe-top, 24px) + 8px);
 }
 .app-safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-bottom, 0px) + 6rem);

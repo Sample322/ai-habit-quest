@@ -106,11 +106,12 @@ export function ready(): void {
   readyCalled = true;
   tg.ready();
   tg.expand();
-  // TG 8.0+: drop the inline-sheet chrome (close/drag/menu strip) by going
-  // fullscreen. When the Mini App was opened via the menu button it's
-  // already fullscreen — call is a no-op. On older clients the method is
-  // undefined; fail soft.
-  try { tg.requestFullscreen?.(); } catch { /* ignore */ }
+  // NOTE: do NOT call tg.requestFullscreen(). On TG 8.0+ that forces the
+  // WebView under the chrome strip — which is exactly what causes the
+  // close-button overlap in BOTH menu-button and inline-button launches.
+  // Leaving fullscreen to TG's defaults keeps the close-button drawer
+  // *above* the WebView in menu-button mode (matching desktop behaviour),
+  // and the safe-area inset handler below still pads inline-sheet launches.
   // Force Telegram's surrounding chrome to our dark palette regardless of
   // the user's TG theme. Older clients may not have these methods — fail
   // soft.
