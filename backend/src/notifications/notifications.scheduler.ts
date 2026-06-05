@@ -31,21 +31,51 @@ export class NotificationsScheduler {
       },
     });
     const now = new Date();
+    // Stage 1: drop users whose local minute doesn't match — typically 99%+.
+    const due = users.filter((u) =>
+      matchesLocalTime(now, u.timezone, u.reminderHour, u.reminderMinute),
+    );
+    if (due.length === 0) return;
+
+    // Stage 2: batch DailyTask lookup for the survivors. One query instead
+    // of N per-minute round-trips.
+    const dueIds = due.map((u) => u.id);
+    const tasks = await this.prisma.dailyTask.findMany({
+      where: {
+        userId: { in: dueIds },
+        // The localDate column is a DATE (no time) so the user's TZ matters,
+        // but for the same UTC minute users in different timezones may have
+        // different "today" boundaries. Pull the union of all candidate dates
+        // and dispatch per user.
+      },
+      select: { userId: true, localDate: true, doneAt: true },
+    });
+    const tasksByUser = new Map<string, { localDate: Date; doneAt: Date | null }[]>();
+    for (const t of tasks) {
+      const arr = tasksByUser.get(t.userId) ?? [];
+      arr.push({ localDate: t.localDate, doneAt: t.doneAt });
+      tasksByUser.set(t.userId, arr);
+    }
+
     let sent = 0;
-    for (const u of users) {
-      if (!matchesLocalTime(now, u.timezone, u.reminderHour, u.reminderMinute)) continue;
+    for (const u of due) {
       const localDate = todayLocalDate(u.timezone);
-      const tasks = await this.prisma.dailyTask.findMany({
-        where: { userId: u.id, localDate },
-      });
-      if (tasks.length === 0) continue;
-      const allDone = tasks.every((t) => t.doneAt !== null);
-      if (allDone) continue;
+      const localKey = localDate.toISOString().slice(0, 10);
+      const userTasks = (tasksByUser.get(u.id) ?? []).filter(
+        (t) => t.localDate.toISOString().slice(0, 10) === localKey,
+      );
+      if (userTasks.length === 0) continue;
+      const remaining = userTasks.filter((t) => t.doneAt === null).length;
+      if (remaining === 0) continue;
       const msg = u.languageCode === 'en'
-        ? `Your habits for today are waiting — ${tasks.filter((t) => !t.doneAt).length} left.`
-        : `Сегодняшние привычки ждут — осталось ${tasks.filter((t) => !t.doneAt).length}.`;
-      await this.bot.sendReminder(u.telegramId, msg);
-      sent++;
+        ? `Your habits for today are waiting — ${remaining} left.`
+        : `Сегодняшние привычки ждут — осталось ${remaining}.`;
+      try {
+        await this.bot.sendReminder(u.telegramId, msg);
+        sent++;
+      } catch (err) {
+        this.logger.warn(`reminder failed for ${u.id}: ${(err as Error).message}`);
+      }
     }
     if (sent > 0) this.logger.log(`Sent ${sent} reminders`);
   }
@@ -76,30 +106,49 @@ export class NotificationsScheduler {
     });
 
     const now = new Date();
-    let sent = 0;
+    // Filter the time + weekday match first.
+    interface DueHabit { id: string; title: string; localDate: Date; userId: string; telegramId: bigint; languageCode: string }
+    const due: DueHabit[] = [];
     for (const h of habits) {
       const tz = h.user.timezone;
       if (!matchesLocalTime(now, tz, h.reminderHour!, h.reminderMinute!)) continue;
-
-      // Honour LL weekly schedule.
       const localDate = todayLocalDate(tz);
       const dowBit = 1 << ((localDate.getUTCDay() + 6) % 7);
       if ((h.scheduleMask & dowBit) === 0) continue;
-
-      const task = await this.prisma.dailyTask.findFirst({
-        where: { userId: h.user.id, habitId: h.id, localDate },
+      due.push({
+        id: h.id,
+        title: h.title,
+        localDate,
+        userId: h.user.id,
+        telegramId: h.user.telegramId,
+        languageCode: h.user.languageCode,
       });
-      if (task?.doneAt) continue;
+    }
+    if (due.length === 0) return;
 
-      const isRu = h.user.languageCode !== 'en';
+    // Batch the "is this habit's task already done?" check.
+    const habitIds = due.map((d) => d.id);
+    const doneTasks = await this.prisma.dailyTask.findMany({
+      where: { habitId: { in: habitIds }, doneAt: { not: null } },
+      select: { habitId: true, localDate: true },
+    });
+    const doneKey = new Set(
+      doneTasks.map((t) => `${t.habitId}|${t.localDate.toISOString().slice(0, 10)}`),
+    );
+
+    let sent = 0;
+    for (const d of due) {
+      const key = `${d.id}|${d.localDate.toISOString().slice(0, 10)}`;
+      if (doneKey.has(key)) continue;
+      const isRu = d.languageCode !== 'en';
       const msg = isRu
-        ? `⏰ Напоминание: «${h.title}». Если уже сделал — отметь в приложении.`
-        : `⏰ Reminder: "${h.title}". If you already did it, tick it off in the app.`;
+        ? `⏰ Напоминание: «${d.title}». Если уже сделал — отметь в приложении.`
+        : `⏰ Reminder: "${d.title}". If you already did it, tick it off in the app.`;
       try {
-        await this.bot.sendReminder(h.user.telegramId, msg);
+        await this.bot.sendReminder(d.telegramId, msg);
         sent++;
       } catch (err) {
-        this.logger.warn(`per-habit reminder failed for ${h.id}: ${(err as Error).message}`);
+        this.logger.warn(`per-habit reminder failed for ${d.id}: ${(err as Error).message}`);
       }
     }
     if (sent > 0) this.logger.log(`Sent ${sent} per-habit reminders`);

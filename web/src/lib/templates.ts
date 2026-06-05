@@ -11,7 +11,7 @@ export interface GoalTemplate {
 // Curated preset goals that auto-fill the title field. Designed to reduce the
 // "blank canvas" friction and steer users toward concrete, measurable goals
 // (the AI plan generator behaves best when the title is specific).
-export const TEMPLATES: GoalTemplate[] = [
+const TEMPLATES: GoalTemplate[] = [
   // Sport
   { id: 'run3w', category: 'sport', emoji: '🏃', ru: 'Бегать 3 раза в неделю по 20 минут', en: 'Run 3 times a week for 20 minutes' },
   { id: 'push100', category: 'sport', emoji: '💪', ru: '100 отжиманий в день', en: '100 pushups per day' },

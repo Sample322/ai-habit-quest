@@ -15,7 +15,8 @@ export function setToken(t: string | null): void {
   else localStorage.removeItem('ahq.token');
 }
 
-export function loadToken(): string | null {
+// Internal only — token bootstrap happens through setToken() after login.
+function loadToken(): string | null {
   if (token) return token;
   token = localStorage.getItem('ahq.token');
   return token;

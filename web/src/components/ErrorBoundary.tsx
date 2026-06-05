@@ -33,15 +33,20 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.error) {
       if (this.props.fallback) return this.props.fallback(this.state.error, this.reset);
+      // ErrorBoundary mounts above the language context, so detect once from
+      // navigator.language. Falls back to RU since the app default is Russian.
+      const isEn = typeof navigator !== 'undefined' && navigator.language?.startsWith('en');
+      const title = isEn ? 'Something went wrong' : 'Что-то пошло не так';
+      const reload = isEn ? 'Reload' : 'Перезагрузить';
       return (
         <div className="min-h-screen p-6 flex items-center justify-center">
           <div className="card aurora max-w-md w-full text-center space-y-4 p-6">
             <div className="text-3xl">😵</div>
-            <div className="text-lg font-bold tracking-tight">Что-то пошло не так</div>
+            <div className="text-lg font-bold tracking-tight">{title}</div>
             <div className="text-xs text-muted break-words">
               {this.state.error instanceof Error ? this.state.error.message : String(this.state.error)}
             </div>
-            <button onClick={this.reset} className="btn-primary">Перезагрузить</button>
+            <button onClick={this.reset} className="btn-primary">{reload}</button>
           </div>
         </div>
       );

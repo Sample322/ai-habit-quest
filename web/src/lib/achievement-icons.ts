@@ -2,7 +2,7 @@
 // showcase chips so we can render the user's picked badges without
 // re-fetching /progress on every render.
 
-export const ACHIEVEMENT_ICONS: Record<string, string> = {
+const ACHIEVEMENT_ICONS: Record<string, string> = {
   first_task: '✅',
   goal_setter: '🎯',
   tasks_10: '⚡',

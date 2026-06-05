@@ -217,7 +217,7 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <TimePicker
               icon={<Clock size={13} className="text-muted" />}
-              label="ЧЧ"
+              label={lang === 'en' ? 'HH' : 'ЧЧ'}
               value={hour}
               min={0}
               max={23}
@@ -225,7 +225,7 @@ export function SettingsSheet({ lang, user, onClose, onUserChange }: Props) {
             />
             <TimePicker
               icon={<Clock size={13} className="text-muted" />}
-              label="ММ"
+              label={lang === 'en' ? 'MM' : 'ММ'}
               value={minute}
               min={0}
               max={59}
