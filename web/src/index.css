@@ -98,15 +98,15 @@ textarea:-webkit-autofill {
 .app-safe-top {
   /* Two stacked insets:
    *  1. env(safe-area-inset-top) — OS notch / Dynamic Island.
-   *  2. var(--tg-safe-top) — Telegram's reported content/safe-area inset for
-   *     the sheet chrome (close-button + drag-handle + bot strip). Pushed in
-   *     by lib/telegram.ts on `safeAreaChanged` / `contentSafeAreaChanged`
-   *     events. Defaults to a 96px fallback so inline-launches on TG < 8.0
-   *     (no inset events) still clear the chrome; menu-button launches on
-   *     8.0+ get the actual reported value (0 in fullscreen).
-   * Plus an 8px breathing room so the app header chip sits *below* the
-   * chrome, not flush against it. */
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-safe-top, 96px) + 8px);
+   *  2. var(--tg-safe-top) — Telegram's reported content/safe-area inset
+   *     for the sheet chrome (close-button + drag-handle + bot strip).
+   *     Pushed in by lib/telegram.ts ONLY when the value is non-zero, so
+   *     the static fallback below applies on TG < 8.0 (no inset events)
+   *     and on inline-button launches that don't fire the event.
+   * The 140px fallback covers the worst observed sheet chrome (~110px on
+   * larger Android phones) plus an 8px breathing room so the app's avatar
+   * row sits cleanly under the close button. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-safe-top, 140px) + 8px);
 }
 .app-safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-bottom, 0px) + 6rem);

@@ -77,18 +77,21 @@ const ONYX_BG = '#08090c';
  */
 function syncSafeAreaVars(tg: TelegramWebApp): void {
   const root = document.documentElement;
-  // Inline-button launches put a non-zero contentSafeAreaInset.top — that's
-  // the close-button + drag-handle + bot strip. Menu-button launches stay at
-  // 0. Fall back to 0 so legacy clients don't blow padding up.
-  const ct = tg.contentSafeAreaInset?.top ?? 0;
-  const cb = tg.contentSafeAreaInset?.bottom ?? 0;
-  const st = tg.safeAreaInset?.top ?? 0;
-  const sb = tg.safeAreaInset?.bottom ?? 0;
-  // Use the *larger* of contentSafeAreaInset and safeAreaInset for the top —
-  // contentSafeAreaInset is what TG promises we need but some clients only
-  // expose safeAreaInset (status bar + sheet header).
-  root.style.setProperty('--tg-safe-top', `${Math.max(ct, st)}px`);
-  root.style.setProperty('--tg-safe-bottom', `${Math.max(cb, sb)}px`);
+  // TG 8.0+ reports the real chrome height via contentSafeAreaInset; older
+  // clients leave both inset objects undefined. Only WRITE the CSS variable
+  // when we have a real number — otherwise the static fallback in index.css
+  // (`var(--tg-safe-top, 140px)`) kicks in and covers the worst-case sheet
+  // chrome on legacy clients.
+  const top = Math.max(
+    tg.contentSafeAreaInset?.top ?? 0,
+    tg.safeAreaInset?.top ?? 0,
+  );
+  const bottom = Math.max(
+    tg.contentSafeAreaInset?.bottom ?? 0,
+    tg.safeAreaInset?.bottom ?? 0,
+  );
+  if (top > 0) root.style.setProperty('--tg-safe-top', `${top}px`);
+  if (bottom > 0) root.style.setProperty('--tg-safe-bottom', `${bottom}px`);
 }
 
 let readyCalled = false;
