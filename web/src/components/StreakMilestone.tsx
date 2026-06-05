@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Flame } from 'lucide-react';
+import { Flame, Mountain, Crown, type LucideIcon } from 'lucide-react';
 
 import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
@@ -10,7 +10,11 @@ interface Props {
   onClose: () => void;
 }
 
-const ICON: Record<number, string> = { 7: '🔥', 30: '🌋', 100: '👑' };
+const ICON: Record<number, LucideIcon> = {
+  7: Flame,
+  30: Mountain,
+  100: Crown,
+};
 
 /**
  * Full-screen celebration shown once when the user crosses a streak
@@ -22,7 +26,7 @@ export function StreakMilestone({ lang, streak, onClose }: Props) {
   const title = streak === 7 ? i.milestone.title7
     : streak === 30 ? i.milestone.title30
     : i.milestone.title100;
-  const icon = ICON[streak] ?? '🔥';
+  const IconCmp = ICON[streak] ?? Flame;
 
   useEffect(() => {
     haptic('heavy');
@@ -42,7 +46,9 @@ export function StreakMilestone({ lang, streak, onClose }: Props) {
           className="pointer-events-none absolute -inset-20 rounded-full blur-3xl opacity-60 animate-pulse-glow"
           style={{ background: 'radial-gradient(circle, rgba(255,94,108,0.5), transparent 70%)' }}
         />
-        <div className="relative text-8xl animate-pop">{icon}</div>
+        <div className="relative animate-pop flex items-center justify-center text-warning">
+          <IconCmp size={104} className="drop-shadow-[0_8px_32px_rgba(255,94,108,0.6)]" />
+        </div>
         <div className="relative space-y-2">
           <div className="shimmer text-3xl font-bold tracking-tight">{title}</div>
           <div className="text-sm text-muted">{i.milestone.body}</div>

@@ -236,11 +236,13 @@ function drawCard(
   // Level chip
   drawChip(ctx, W / 2, 740, `${lang === 'en' ? 'Level' : 'Уровень'} ${user.level}`);
 
-  // HUD stats — three big columns centred vertically
+  // HUD stats — three big columns centred vertically. Glyphs are drawn as
+  // vector shapes so the card looks consistent across iOS/Android emoji
+  // fonts (and matches the in-app lucide icon style).
   const yStat = H / 2 + 180;
-  drawStat(ctx, W * 0.18, yStat, '🔥', String(user.streak.current), lang === 'en' ? 'STREAK' : 'СЕРИЯ');
-  drawStat(ctx, W * 0.50, yStat, '⚡', String(user.xpTotal), 'XP');
-  drawStat(ctx, W * 0.82, yStat, '🏆', String(user.streak.best), lang === 'en' ? 'BEST' : 'РЕКОРД');
+  drawStat(ctx, W * 0.18, yStat, 'flame', String(user.streak.current), lang === 'en' ? 'STREAK' : 'СЕРИЯ');
+  drawStat(ctx, W * 0.50, yStat, 'zap', String(user.xpTotal), 'XP');
+  drawStat(ctx, W * 0.82, yStat, 'trophy', String(user.streak.best), lang === 'en' ? 'BEST' : 'РЕКОРД');
 
   // Bottom CTA
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
@@ -297,13 +299,23 @@ function drawStat(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
-  icon: string,
+  icon: 'flame' | 'zap' | 'trophy',
   value: string,
   label: string,
 ): void {
-  ctx.fillStyle = '#f5f7fb';
-  ctx.font = '500 56px Manrope, sans-serif';
-  ctx.fillText(icon, cx, cy - 70);
+  // Vector glyphs replacing emoji — keeps the card visually consistent
+  // across iOS/Android emoji fonts.
+  ctx.save();
+  ctx.translate(cx, cy - 80);
+  ctx.strokeStyle = '#c4a6ff';
+  ctx.fillStyle = '#c4a6ff';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (icon === 'flame') drawFlame(ctx);
+  else if (icon === 'zap') drawZap(ctx);
+  else drawTrophy(ctx);
+  ctx.restore();
 
   ctx.fillStyle = '#f5f7fb';
   ctx.font = '800 96px Manrope, sans-serif';
@@ -312,4 +324,57 @@ function drawStat(
   ctx.fillStyle = '#7c8290';
   ctx.font = '700 24px Manrope, sans-serif';
   ctx.fillText(label, cx, cy + 70);
+}
+
+// Inline approximations of lucide-react Flame / Zap / Trophy SVGs scaled
+// to ~56px square, rendered around (0, 0).
+function drawFlame(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(0, -28);
+  ctx.bezierCurveTo(14, -10, 22, 0, 22, 12);
+  ctx.bezierCurveTo(22, 24, 12, 32, 0, 32);
+  ctx.bezierCurveTo(-12, 32, -22, 24, -22, 12);
+  ctx.bezierCurveTo(-22, 0, -8, -8, 0, -28);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawZap(ctx: CanvasRenderingContext2D): void {
+  ctx.beginPath();
+  ctx.moveTo(6, -28);
+  ctx.lineTo(-16, 4);
+  ctx.lineTo(-2, 4);
+  ctx.lineTo(-6, 28);
+  ctx.lineTo(16, -4);
+  ctx.lineTo(2, -4);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawTrophy(ctx: CanvasRenderingContext2D): void {
+  // cup
+  ctx.beginPath();
+  ctx.moveTo(-16, -22);
+  ctx.lineTo(16, -22);
+  ctx.lineTo(14, 6);
+  ctx.bezierCurveTo(14, 14, 8, 18, 0, 18);
+  ctx.bezierCurveTo(-8, 18, -14, 14, -14, 6);
+  ctx.closePath();
+  ctx.stroke();
+  // handles
+  ctx.beginPath();
+  ctx.moveTo(-16, -18);
+  ctx.bezierCurveTo(-28, -16, -28, 4, -16, 6);
+  ctx.moveTo(16, -18);
+  ctx.bezierCurveTo(28, -16, 28, 4, 16, 6);
+  ctx.stroke();
+  // base
+  ctx.beginPath();
+  ctx.moveTo(-2, 18);
+  ctx.lineTo(-2, 26);
+  ctx.lineTo(-10, 30);
+  ctx.lineTo(10, 30);
+  ctx.lineTo(2, 26);
+  ctx.lineTo(2, 18);
+  ctx.stroke();
 }

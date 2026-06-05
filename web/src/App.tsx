@@ -394,11 +394,11 @@ function Header({
               {user.showcase.slice(0, 3).map((code) => (
                 <span
                   key={code}
-                  className="text-xs leading-none"
+                  className="inline-flex items-center justify-center text-accent"
                   title={code}
                   aria-label={code}
                 >
-                  {iconFor(code)}
+                  {(() => { const IC = iconFor(code); return <IC size={12} />; })()}
                 </span>
               ))}
             </div>

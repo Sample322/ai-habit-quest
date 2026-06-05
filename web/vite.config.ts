@@ -9,6 +9,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // 'hidden' emits sourcemaps but does NOT include the //# sourceMappingURL
+    // pragma in the bundled JS — so devtools won't auto-fetch them, the
+    // public-facing JS reveals nothing, and we can still upload the maps
+    // to Sentry out-of-band for symbolicated stack traces.
+    sourcemap: 'hidden',
   },
 });

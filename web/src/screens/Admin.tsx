@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown, Infinity as InfinityIcon, Activity, UserPlus, Target, CreditCard } from 'lucide-react';
+import { X, Wrench, BarChart3, Users as UsersIcon, MessageSquare, Search, Crown, Infinity as InfinityIcon, Activity, UserPlus, Target, CreditCard, Flame, Zap } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
@@ -279,8 +279,8 @@ function UserRow({
           <div className="text-[10px] text-muted mt-0.5 tabular flex items-center gap-2 flex-wrap">
             <span>tg:{user.telegramId}</span>
             <span>·</span>
-            <span>🔥{user.streakCurrent}</span>
-            <span>⭐{user.xpTotal}</span>
+            <span className="inline-flex items-center gap-0.5"><Flame size={10} className="text-warning" />{user.streakCurrent}</span>
+            <span className="inline-flex items-center gap-0.5"><Zap size={10} className="text-accent" />{user.xpTotal}</span>
             <span>Lv{user.level}</span>
             {premiumLabel && <span className="text-accent">· {premiumLabel}</span>}
           </div>

@@ -80,7 +80,7 @@ export function Today({
       setBonus(updated);
       onUserChange({ ...user, xpTotal });
       notify('success');
-      showToast(`✨ +${updated.xp} XP`);
+      showToast(`+${updated.xp} XP`);
     } catch {
       notify('error');
     } finally {
@@ -142,7 +142,7 @@ export function Today({
       if (newAchievements && newAchievements.length > 0) {
         track('achievement_unlocked', { code: newAchievements[0].code });
         const a = newAchievements[0];
-        showToast(`🏆 ${i.achievementUnlocked} ${a.icon} ${a.title}`);
+        showToast(`${i.achievementUnlocked}: ${a.title}`);
       }
     } catch {
       notify('error');
@@ -164,7 +164,7 @@ export function Today({
     lastCelebrationKey.current = key;
     setConfetti(true);
     notify('success');
-    showToast(lang === 'en' ? '🎉 Day completed!' : '🎉 День закрыт!');
+    showToast(lang === 'en' ? 'Day completed' : 'День закрыт');
     track('day_completed', { total: overall.total });
     const off = setTimeout(() => setConfetti(false), 2600);
     return () => clearTimeout(off);

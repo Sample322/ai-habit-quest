@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown, Trophy, Sparkles, Share2 } from 'lucide-react';
 
+import { iconFor } from '../lib/achievement-icons';
 import { api } from '../lib/api';
 import { t, type Lang } from '../lib/i18n';
 import type { Achievement, AchievementRarity, LeaderboardScope, LeaguesMe, ProgressOverview, Leaderboard, SeasonView, User } from '../lib/types';
@@ -222,14 +223,17 @@ export function Progress({ lang, user, onUserChange, onPremiumClick, onOpenGalle
                   key={e.id}
                   className={`px-4 py-2.5 flex items-center gap-3 transition ${e.isMe ? 'bg-accent/10' : ''}`}
                 >
-                  <div className={`w-7 text-center font-bold ${e.position <= 3 ? 'text-warning' : 'text-muted text-xs'}`}>
-                    {e.position === 1 ? '🥇' : e.position === 2 ? '🥈' : e.position === 3 ? '🥉' : e.position}
+                  <div className={`w-7 text-center font-bold flex items-center justify-center ${e.position <= 3 ? '' : 'text-muted text-xs'}`}>
+                    {e.position === 1 ? <Trophy size={16} className="text-warning" />
+                      : e.position === 2 ? <Trophy size={15} className="text-muted" />
+                      : e.position === 3 ? <Trophy size={14} className="text-amber-700" />
+                      : e.position}
                   </div>
                   <div className="flex-1 min-w-0 truncate text-sm font-medium">
                     {e.name}
                     {e.isMe && <span className="text-accent text-[10px] uppercase tracking-wider ml-1">· {L('ты', 'you')}</span>}
                   </div>
-                  <div className="text-[10px] text-muted tabular shrink-0">🔥{e.streak}</div>
+                  <div className="text-[10px] text-muted tabular shrink-0 flex items-center gap-0.5"><Flame size={10} className="text-warning" />{e.streak}</div>
                   <div className="text-sm font-bold tabular shrink-0 text-text min-w-[3rem] text-right">{e.xp}</div>
                 </div>
               ))}
@@ -304,7 +308,7 @@ function SeasonCard({ season, lang }: { season: SeasonView; lang: Lang }) {
               }`}
             >
               <span className={`shrink-0 w-5 h-5 rounded-pill grid place-items-center text-[10px] font-bold ${inTier ? 'bg-positive text-bg' : 'bg-white/5 text-muted'}`}>
-                {tier.maxRank === 1 ? '🥇' : tier.maxRank}
+                {tier.maxRank === 1 ? <Trophy size={11} /> : tier.maxRank}
               </span>
               <span className="flex-1 font-medium">
                 {i.progress.seasonRewardTier
@@ -377,7 +381,7 @@ function LeagueCard({ league, lang }: { league: LeaguesMe; lang: Lang }) {
                 {m.position}
               </div>
               <div className="flex-1 truncate font-medium">{m.name}</div>
-              <div className="text-[10px] text-muted">🔥{m.streak}</div>
+              <div className="text-[10px] text-muted flex items-center gap-0.5"><Flame size={10} className="text-warning" />{m.streak}</div>
               <div className="font-semibold tabular tabular text-text min-w-[2.5rem] text-right">{m.weeklyXp}</div>
             </div>
           );
@@ -425,7 +429,7 @@ function AchievementCard({ a, lang }: { a: Achievement; lang: Lang }) {
             a.earned ? rs.ring + ' bg-bg/40' : 'border-hairline bg-bg/40'
           } ${a.earned ? '' : a.hidden ? 'opacity-60' : 'opacity-40 grayscale'}`}
         >
-          {a.hidden ? <Lock size={14} className="text-muted" /> : <span>{a.icon}</span>}
+          {a.hidden ? <Lock size={14} className="text-muted" /> : (() => { const IC = iconFor(a.code); return <IC size={16} className={a.earned ? 'text-accent' : 'text-muted'} />; })()}
         </span>
         <div className="min-w-0 flex-1">
           <div className={`text-sm font-semibold truncate ${a.earned ? '' : 'text-muted'}`}>{a.title}</div>

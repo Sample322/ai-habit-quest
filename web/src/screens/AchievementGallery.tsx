@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { haptic, notify } from '../lib/telegram';
 import { t, type Lang } from '../lib/i18n';
 import type { Achievement, AchievementRarity, ProgressOverview, User } from '../lib/types';
+import { iconFor } from '../lib/achievement-icons';
 
 interface Props {
   lang: Lang;
@@ -118,12 +119,12 @@ function Card({
     >
       {picked && (
         <span className="absolute top-2 right-2 text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-pill bg-accent/20 text-accent">
-          ★ {i.gallery.showcasePicked}
+          <Star size={9} className="inline-block mr-0.5" /> {i.gallery.showcasePicked}
         </span>
       )}
       <div className="flex items-center gap-2">
-        <span className={`shrink-0 w-9 h-9 rounded-pill grid place-items-center text-lg border ${a.earned ? rs.ring + ' bg-bg/40' : 'border-hairline bg-bg/40 opacity-40'}`}>
-          {a.hidden ? <Lock size={14} className="text-muted" /> : a.icon}
+        <span className={`shrink-0 w-9 h-9 rounded-pill grid place-items-center border ${a.earned ? rs.ring + ' bg-bg/40' : 'border-hairline bg-bg/40 opacity-40'}`}>
+          {a.hidden ? <Lock size={14} className="text-muted" /> : (() => { const IC = iconFor(a.code); return <IC size={16} className={a.earned ? 'text-accent' : 'text-muted'} />; })()}
         </span>
         <div className="min-w-0 flex-1">
           <div className={`text-sm font-semibold truncate ${a.earned ? '' : 'text-muted'}`}>

@@ -167,7 +167,6 @@ export function Onboarding({
                             : 'border-hairlineStrong text-muted bg-white/[0.02] hover:text-text hover:bg-white/[0.04]'
                         }`}
                       >
-                        <span>{t.emoji}</span>
                         <span className="truncate max-w-[200px]">{text}</span>
                       </button>
                     );

@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen p-6 flex items-center justify-center">
           <div className="card aurora max-w-md w-full text-center space-y-4 p-6">
-            <div className="text-3xl">😵</div>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto text-warning"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
             <div className="text-lg font-bold tracking-tight">{title}</div>
             <div className="text-xs text-muted break-words">
               {this.state.error instanceof Error ? this.state.error.message : String(this.state.error)}
