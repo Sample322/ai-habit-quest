@@ -44,3 +44,4 @@ ollama-data/
 
 # Planning local-only state (per gsd config: commit_docs=true keeps PROJECT/ROADMAP, but local notes ignored)
 .planning/_local/
+tests/e2e/test-results/

@@ -91,9 +91,16 @@ function syncSafeAreaVars(tg: TelegramWebApp): void {
   root.style.setProperty('--tg-safe-bottom', `${Math.max(cb, sb)}px`);
 }
 
+let readyCalled = false;
+
 export function ready(): void {
   const tg = getWebApp();
   if (!tg) return;
+  // React StrictMode runs effects twice in dev — without this guard the
+  // safeAreaChanged handlers would be subscribed twice and the inset CSS
+  // var would be written twice per event (idempotent but wasteful).
+  if (readyCalled) return;
+  readyCalled = true;
   tg.ready();
   tg.expand();
   // TG 8.0+: drop the inline-sheet chrome (close/drag/menu strip) by going

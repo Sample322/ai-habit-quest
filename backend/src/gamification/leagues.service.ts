@@ -202,13 +202,34 @@ export class LeaguesService {
   }
 
   private async refreshLeagueWeeklyXp(leagueId: string, weekStart: Date): Promise<void> {
-    const members = await this.prisma.leagueMember.findMany({ where: { leagueId } });
-    for (const m of members) {
-      const xp = await this.computeWeeklyXp(m.userId, weekStart);
-      if (xp !== m.weeklyXp) {
-        await this.prisma.leagueMember.update({ where: { id: m.id }, data: { weeklyXp: xp } });
-      }
-    }
+    // N+1 fix: replace the per-member aggregate (30 queries / league read)
+    // with one groupBy across all members, then patch only the rows whose
+    // weeklyXp drifted.
+    const members = await this.prisma.leagueMember.findMany({
+      where: { leagueId },
+      select: { id: true, userId: true, weeklyXp: true },
+    });
+    if (members.length === 0) return;
+
+    const userIds = members.map((m) => m.userId);
+    const sums = await this.prisma.dailyTask.groupBy({
+      by: ['userId'],
+      where: { userId: { in: userIds }, doneAt: { gte: weekStart } },
+      _sum: { xpAwarded: true },
+    });
+    const xpByUser = new Map<string, number>();
+    for (const s of sums) xpByUser.set(s.userId, s._sum.xpAwarded ?? 0);
+
+    await Promise.all(
+      members.map((m) => {
+        const xp = xpByUser.get(m.userId) ?? 0;
+        if (xp === m.weeklyXp) return Promise.resolve();
+        return this.prisma.leagueMember.update({
+          where: { id: m.id },
+          data: { weeklyXp: xp },
+        });
+      }),
+    );
   }
 }
 

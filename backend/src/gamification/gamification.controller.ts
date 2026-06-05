@@ -135,23 +135,26 @@ export class GamificationController {
     const friendIds = isFriends ? await this.friendIds(me.id) : null;
     const where = friendIds ? { id: { in: friendIds } } : {};
 
-    const top = await this.prisma.user.findMany({
-      where,
-      orderBy: [{ xpTotal: 'desc' }, { createdAt: 'asc' }],
-      take: 20,
-      select: { id: true, firstName: true, username: true, xpTotal: true, level: true, streakCurrent: true },
-    });
-
+    // The board queries are independent — fan out so the round-trip is
+    // one network hop, not four serialised hops.
     const meRow = await this.prisma.user.findUniqueOrThrow({
       where: { id: me.id },
       select: { xpTotal: true },
     });
-    const ahead = await this.prisma.user.count({
-      where: friendIds
-        ? { id: { in: friendIds }, xpTotal: { gt: meRow.xpTotal } }
-        : { xpTotal: { gt: meRow.xpTotal } },
-    });
-    const totalPlayers = await this.prisma.user.count({ where });
+    const [top, ahead, totalPlayers] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: [{ xpTotal: 'desc' }, { createdAt: 'asc' }],
+        take: 20,
+        select: { id: true, firstName: true, username: true, xpTotal: true, level: true, streakCurrent: true },
+      }),
+      this.prisma.user.count({
+        where: friendIds
+          ? { id: { in: friendIds }, xpTotal: { gt: meRow.xpTotal } }
+          : { xpTotal: { gt: meRow.xpTotal } },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
 
     return {
       scope: isFriends ? 'friends' : 'global',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Flame, Snowflake, Lock, Award, Users, ChevronRight, Crown, Trophy, Sparkles, Share2 } from 'lucide-react';
 
 import { api } from '../lib/api';
@@ -6,7 +6,13 @@ import { t, type Lang } from '../lib/i18n';
 import type { Achievement, AchievementRarity, LeaderboardScope, LeaguesMe, ProgressOverview, Leaderboard, SeasonView, User } from '../lib/types';
 import { ProgressRing } from '../components/ui/ProgressRing';
 import { NumberTicker } from '../components/ui/NumberTicker';
-import { ShareProgressCard } from '../components/ShareProgressCard';
+
+// Heavy: 1080x1920 canvas drawing code only matters when the user opens the
+// share modal. Keep it out of the Progress critical path so the screen
+// hydrates faster.
+const ShareProgressCard = lazy(() =>
+  import('../components/ShareProgressCard').then((m) => ({ default: m.ShareProgressCard })),
+);
 
 export function Progress({ lang, user, onUserChange, onPremiumClick, onOpenGallery }: {
   lang: Lang;
@@ -250,12 +256,14 @@ export function Progress({ lang, user, onUserChange, onPremiumClick, onOpenGalle
       )}
 
       {shareOpen && (
-        <ShareProgressCard
-          lang={lang}
-          user={user}
-          rankName={data.rank.name}
-          onClose={() => setShareOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <ShareProgressCard
+            lang={lang}
+            user={user}
+            rankName={data.rank.name}
+            onClose={() => setShareOpen(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

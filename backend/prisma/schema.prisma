@@ -47,46 +47,46 @@ enum PaymentEventStatus {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  telegramId    BigInt   @unique
-  username      String?
-  firstName     String?
-  lastName      String?
-  languageCode  String   @default("ru")
-  timezone      String   @default("Europe/Moscow")
-  reminderHour  Int      @default(9)
-  reminderMinute Int     @default(0)
+  id                       String    @id @default(cuid())
+  telegramId               BigInt    @unique
+  username                 String?
+  firstName                String?
+  lastName                 String?
+  languageCode             String    @default("ru")
+  timezone                 String    @default("Europe/Moscow")
+  reminderHour             Int       @default(9)
+  reminderMinute           Int       @default(0)
   // U: per-channel notification preferences. All default-on so legacy users
   // keep current behaviour; UI lets them mute individual streams.
-  notifReminders     Boolean @default(true)
-  notifAchievements  Boolean @default(true)
-  notifSeasons       Boolean @default(true)
-  notifStreakBreak   Boolean @default(true)
-  notifWeeklyRecap   Boolean @default(true)
+  notifReminders           Boolean   @default(true)
+  notifAchievements        Boolean   @default(true)
+  notifSeasons             Boolean   @default(true)
+  notifStreakBreak         Boolean   @default(true)
+  notifWeeklyRecap         Boolean   @default(true)
   // T: weekly recap tracking — last Monday a recap DM was sent (avoid double).
-  lastRecapAt        DateTime?
+  lastRecapAt              DateTime?
   // RR: up to 3 favourite achievement codes to surface on Header + leaderboard.
-  showcaseAchievements String[] @default([])
+  showcaseAchievements     String[]  @default([])
   // TT: Premium AI coaching style. Forwarded to ai-service when generating plans.
   // Allowed: 'gentle' | 'strict' | 'humor' | null.
-  aiCoachingStyle    String?
+  aiCoachingStyle          String?
   // UU: dedupe weekly AI review.
-  lastAiReviewAt     DateTime?
-  isPremium     Boolean  @default(false)
-  premiumUntil  DateTime?
-  streakCurrent Int      @default(0)
-  streakBest    Int      @default(0)
+  lastAiReviewAt           DateTime?
+  isPremium                Boolean   @default(false)
+  premiumUntil             DateTime?
+  streakCurrent            Int       @default(0)
+  streakBest               Int       @default(0)
   // L: streak-break DM. Set when streak transitions positive → 0 in recompute.
   // Cleared when recompute sees current > 0 again.
-  streakBrokenAt       DateTime?
-  streakBrokenNotified Boolean   @default(false)
-  xpTotal       Int      @default(0)
-  level         Int      @default(0)
+  streakBrokenAt           DateTime?
+  streakBrokenNotified     Boolean   @default(false)
+  xpTotal                  Int       @default(0)
+  level                    Int       @default(0)
   // D1: streak freeze — Premium-only restore. Counter resets when month changes.
   // streakFreezeDates: ISO YYYY-MM-DD strings that recompute treats as "had a completion"
-  streakFreezesLeft  Int      @default(2)
-  streakFreezesMonth String?              // "YYYY-MM" in user's TZ
-  streakFreezeDates  String[] @default([])
+  streakFreezesLeft        Int       @default(2)
+  streakFreezesMonth       String? // "YYYY-MM" in user's TZ
+  streakFreezeDates        String[]  @default([])
   // D5 / referral 2.0:
   // - referralRewarded: inviter has been paid +3d (one-shot, on invitee's first goal create)
   // - referralGiftClaimedAt: timestamp when invitee got their welcome +3d gift
@@ -98,12 +98,12 @@ model User {
   // After expiry, scheduler DMs user once with upsell.
   trialClaimedAt           DateTime?
   trialReminderSent        Boolean   @default(false)
-  referralCode  String   @unique
-  referredById  String?
-  referredBy    User?    @relation("Referrals", fields: [referredById], references: [id])
-  referrals     User[]   @relation("Referrals")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  referralCode             String    @unique
+  referredById             String?
+  referredBy               User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals                User[]    @relation("Referrals")
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   goals         Goal[]
   habits        Habit[]
@@ -117,6 +117,11 @@ model User {
   seasonResults SeasonResult[]
 
   @@index([referredById])
+  // Covers the global leaderboard `ORDER BY xpTotal DESC` + the rank `COUNT
+  // WHERE xpTotal > $me` lookup. Without it, growing the user table to a
+  // few thousand rows turns the Progress screen's leaderboard call into a
+  // full scan + sort.
+  @@index([xpTotal])
 }
 
 model Goal {
@@ -132,31 +137,31 @@ model Goal {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  habits      Habit[]
-  plan        Plan?
+  habits Habit[]
+  plan   Plan?
 
   @@index([userId, status])
 }
 
 model Habit {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goalId    String
-  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  title     String
-  position  Int      @default(0)
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId          String
+  goal            Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title           String
+  position        Int      @default(0)
   // LL: weekly schedule bitmask. bit0=Mon … bit6=Sun. Default 127 = all 7 days.
   // Materialiser only inserts a DailyTask when (1 << dayOfWeek) & mask != 0.
-  scheduleMask Int   @default(127)
+  scheduleMask    Int      @default(127)
   // NN: per-habit reminder override. When enabled, the notifications scheduler
   // DMs at this local time instead of the user's global reminder. Defaults
   // match the user's global so opt-in is a single toggle on Habit edit.
-  reminderEnabled Boolean @default(false)
+  reminderEnabled Boolean  @default(false)
   reminderHour    Int?
   reminderMinute  Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   dailyTasks DailyTask[]
 
@@ -169,24 +174,24 @@ model Plan {
   goalId      String   @unique
   goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
   horizonDays Int
-  provider    String   // "stub" | "ollama"
-  payload     Json     // full plan JSON returned by ai-service
+  provider    String // "stub" | "ollama"
+  payload     Json // full plan JSON returned by ai-service
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model DailyTask {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  habitId     String
-  habit       Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
-  localDate   DateTime  @db.Date
-  title       String
-  doneAt      DateTime?
-  xpAwarded   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habitId   String
+  habit     Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  localDate DateTime  @db.Date
+  title     String
+  doneAt    DateTime?
+  xpAwarded Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@unique([habitId, localDate])
   @@index([userId, localDate])
@@ -200,7 +205,7 @@ model BonusTask {
   localDate DateTime  @db.Date
   title     String
   xp        Int       @default(25)
-  provider  String    // "openai" | "stub"
+  provider  String // "openai" | "stub"
   doneAt    DateTime?
   createdAt DateTime  @default(now())
 
@@ -209,21 +214,21 @@ model BonusTask {
 }
 
 model Badge {
-  id          String      @id @default(cuid())
-  code        String      @unique
+  id          String   @id @default(cuid())
+  code        String   @unique
   title       String
   description String
   iconKey     String
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
 
-  userBadges  UserBadge[]
+  userBadges UserBadge[]
 }
 
 model UserBadge {
   userId   String
-  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   badgeId  String
-  badge    Badge   @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
   earnedAt DateTime @default(now())
 
   @@id([userId, badgeId])
@@ -235,31 +240,31 @@ model Subscription {
   user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider          SubscriptionProvider
   status            SubscriptionStatus
-  paymentMethodId   String?              // YooKassa saved card token
-  externalId        String?              // YooKassa subscription/payment id
+  paymentMethodId   String? // YooKassa saved card token
+  externalId        String? // YooKassa subscription/payment id
   currentPeriodEnd  DateTime?
   cancelAtPeriodEnd Boolean              @default(false)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  payments          PaymentEvent[]
+  payments PaymentEvent[]
 
   @@index([userId, status])
 }
 
 model PaymentEvent {
-  id             String              @id @default(cuid())
+  id             String               @id @default(cuid())
   userId         String
-  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscriptionId String?
-  subscription   Subscription?       @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  subscription   Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   provider       SubscriptionProvider
   externalId     String?
-  amountMinor    Int                 // in minor units (kopeks or stars)
-  currency       String              // "RUB" | "XTR"
+  amountMinor    Int // in minor units (kopeks or stars)
+  currency       String // "RUB" | "XTR"
   status         PaymentEventStatus
   rawPayload     Json?
-  createdAt      DateTime            @default(now())
+  createdAt      DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([externalId])
@@ -276,23 +281,23 @@ model Feedback {
 // D2: leagues. Weekly groups of ~30 users; XP this week ranks them inside the
 // league. Cron rotates: top 7 promote up a tier, bottom 5 demote, mid stays.
 model League {
-  id          String         @id @default(cuid())
-  tier        Int            // 0 = Bronze, 1 = Silver, ... up to 4 = Diamond
-  weekStart   DateTime       @db.Date  // Monday of the week this league covers
-  createdAt   DateTime       @default(now())
-  members     LeagueMember[]
+  id        String         @id @default(cuid())
+  tier      Int // 0 = Bronze, 1 = Silver, ... up to 4 = Diamond
+  weekStart DateTime       @db.Date // Monday of the week this league covers
+  createdAt DateTime       @default(now())
+  members   LeagueMember[]
 
   @@index([weekStart, tier])
 }
 
 model LeagueMember {
-  id          String   @id @default(cuid())
-  leagueId    String
-  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weeklyXp    Int      @default(0)
-  joinedAt    DateTime @default(now())
+  id       String   @id @default(cuid())
+  leagueId String
+  league   League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyXp Int      @default(0)
+  joinedAt DateTime @default(now())
 
   @@unique([leagueId, userId])
   @@index([userId])
@@ -306,14 +311,14 @@ enum SeasonStatus {
 }
 
 model Season {
-  id        String        @id @default(cuid())
-  number    Int           @unique          // 1, 2, 3 …
-  startDate DateTime      @db.Date
-  endDate   DateTime      @db.Date
-  status    SeasonStatus  @default(active)
-  createdAt DateTime      @default(now())
+  id        String       @id @default(cuid())
+  number    Int          @unique // 1, 2, 3 …
+  startDate DateTime     @db.Date
+  endDate   DateTime     @db.Date
+  status    SeasonStatus @default(active)
+  createdAt DateTime     @default(now())
 
-  results   SeasonResult[]
+  results SeasonResult[]
 
   @@index([status])
 }
@@ -325,9 +330,9 @@ model SeasonResult {
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   seasonalXp    Int      @default(0)
-  finalRank     Int                // 1-based; assigned at close
+  finalRank     Int // 1-based; assigned at close
   rewardClaimed Boolean  @default(false)
-  rewardKind    String?            // "premium_7d" | "premium_3d" | "badge"
+  rewardKind    String? // "premium_7d" | "premium_3d" | "badge"
   createdAt     DateTime @default(now())
 
   @@unique([seasonId, userId])
@@ -348,12 +353,12 @@ model ShareImage {
 }
 
 model PlanCache {
-  id          String   @id @default(cuid())
-  cacheKey    String   @unique // hash of category|level|horizonDays|provider
+  id          String       @id @default(cuid())
+  cacheKey    String       @unique // hash of category|level|horizonDays|provider
   category    GoalCategory
   horizonDays Int
   provider    String
   payload     Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
