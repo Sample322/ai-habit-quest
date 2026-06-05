@@ -96,16 +96,20 @@ textarea:-webkit-autofill {
  * modals).  Without this the header (avatar + name + chips) sits underneath
  * the Telegram close button. */
 .app-safe-top {
-  /* Mini Apps opened via the bot's inline "Открыть приложение" URL button
-   * land in Telegram's sheet view, which adds a *close + drag-handle + menu*
-   * strip ~70-90px tall above the WebView in addition to the OS status bar.
-   * Menu-button launches skip that strip and only need ~70px. 120px covers
-   * the worst case; the iOS notch adds env(safe-area-inset-top) on top so
-   * notched devices push further down automatically. */
-  padding-top: calc(env(safe-area-inset-top, 0px) + 120px);
+  /* Two stacked insets:
+   *  1. env(safe-area-inset-top) — OS notch / Dynamic Island.
+   *  2. var(--tg-safe-top) — Telegram's reported content/safe-area inset for
+   *     the sheet chrome (close-button + drag-handle + bot strip). Pushed in
+   *     by lib/telegram.ts on `safeAreaChanged` / `contentSafeAreaChanged`
+   *     events. Defaults to a 96px fallback so inline-launches on TG < 8.0
+   *     (no inset events) still clear the chrome; menu-button launches on
+   *     8.0+ get the actual reported value (0 in fullscreen).
+   * Plus an 8px breathing room so the app header chip sits *below* the
+   * chrome, not flush against it. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-safe-top, 96px) + 8px);
 }
 .app-safe-bottom {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6rem);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-bottom, 0px) + 6rem);
 }
 /* Modal bottom-sheet variant — sheets already get their own safe-area on
  * iOS; keep it explicit so the close button doesn't sit under the home

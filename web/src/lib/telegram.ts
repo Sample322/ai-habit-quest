@@ -22,6 +22,13 @@ interface TelegramWebApp {
   /** TG 8.0+: ask the client to drop the sheet chrome and use the full screen. */
   requestFullscreen?: () => void;
   isFullscreen?: boolean;
+  /** TG 8.0+: actual px chrome covers around the WebView. */
+  safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  /** TG 8.0+: px the WebView content has to clear so it isn't under chrome. */
+  contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  /** TG WebApp event bus. */
+  onEvent?: (event: string, handler: () => void) => void;
+  offEvent?: (event: string, handler: () => void) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   setBottomBarColor?: (color: string) => void;
@@ -62,6 +69,28 @@ export function getWebApp(): TelegramWebApp | null {
 // home-indicator area) matches the app body — no light/dark split-bar.
 const ONYX_BG = '#08090c';
 
+/**
+ * Mirror TG's reported safe-area / content-safe-area inset values into CSS
+ * custom properties so layout (.app-safe-top, .app-safe-bottom) can absorb
+ * the inline-sheet chrome the WebView is painted under. Re-runs on every
+ * `safeAreaChanged` and `contentSafeAreaChanged` event the client emits.
+ */
+function syncSafeAreaVars(tg: TelegramWebApp): void {
+  const root = document.documentElement;
+  // Inline-button launches put a non-zero contentSafeAreaInset.top — that's
+  // the close-button + drag-handle + bot strip. Menu-button launches stay at
+  // 0. Fall back to 0 so legacy clients don't blow padding up.
+  const ct = tg.contentSafeAreaInset?.top ?? 0;
+  const cb = tg.contentSafeAreaInset?.bottom ?? 0;
+  const st = tg.safeAreaInset?.top ?? 0;
+  const sb = tg.safeAreaInset?.bottom ?? 0;
+  // Use the *larger* of contentSafeAreaInset and safeAreaInset for the top —
+  // contentSafeAreaInset is what TG promises we need but some clients only
+  // expose safeAreaInset (status bar + sheet header).
+  root.style.setProperty('--tg-safe-top', `${Math.max(ct, st)}px`);
+  root.style.setProperty('--tg-safe-bottom', `${Math.max(cb, sb)}px`);
+}
+
 export function ready(): void {
   const tg = getWebApp();
   if (!tg) return;
@@ -78,6 +107,16 @@ export function ready(): void {
   try { tg.setHeaderColor?.(ONYX_BG); } catch { /* ignore */ }
   try { tg.setBackgroundColor?.(ONYX_BG); } catch { /* ignore */ }
   try { tg.setBottomBarColor?.(ONYX_BG); } catch { /* ignore */ }
+  // Initial inset sync + subscribe to TG's safe-area events so rotation or
+  // fullscreen toggle updates layout live.
+  syncSafeAreaVars(tg);
+  try {
+    const handler = () => syncSafeAreaVars(tg);
+    tg.onEvent?.('safeAreaChanged', handler);
+    tg.onEvent?.('contentSafeAreaChanged', handler);
+    tg.onEvent?.('fullscreenChanged', handler);
+    tg.onEvent?.('viewportChanged', handler);
+  } catch { /* ignore */ }
 }
 
 export function getInitData(): string {
