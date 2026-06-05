@@ -19,6 +19,9 @@ interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
+  /** TG 6.0+: visible Web App height after the last stable state. Excludes
+   *  chrome painted *over* the WebView (sheet close-button strip). */
+  viewportStableHeight?: number;
   /** TG 8.0+: ask the client to drop the sheet chrome and use the full screen. */
   requestFullscreen?: () => void;
   isFullscreen?: boolean;
@@ -77,21 +80,30 @@ const ONYX_BG = '#08090c';
  */
 function syncSafeAreaVars(tg: TelegramWebApp): void {
   const root = document.documentElement;
-  // TG 8.0+ reports the real chrome height via contentSafeAreaInset; older
-  // clients leave both inset objects undefined. Only WRITE the CSS variable
-  // when we have a real number — otherwise the static fallback in index.css
-  // (`var(--tg-safe-top, 140px)`) kicks in and covers the worst-case sheet
-  // chrome on legacy clients.
-  const top = Math.max(
-    tg.contentSafeAreaInset?.top ?? 0,
-    tg.safeAreaInset?.top ?? 0,
-  );
-  const bottom = Math.max(
-    tg.contentSafeAreaInset?.bottom ?? 0,
-    tg.safeAreaInset?.bottom ?? 0,
-  );
+  // Three signals for "how many px does the chrome cover at the top":
+  //  1. contentSafeAreaInset.top — TG 8.0+, reports the chrome strip height
+  //     in inline-sheet launches.
+  //  2. safeAreaInset.top — TG 8.0+ device safe-area (OS notch).
+  //  3. window.innerHeight - viewportStableHeight — when TG paints chrome
+  //     OVER the WebView (inline sheet), the WebView itself is full screen
+  //     but viewportStableHeight reports the chrome-free area. The diff is
+  //     the chrome strip height. In menu-button mode TG renders the header
+  //     ABOVE the WebView so the diff is 0. This is the most reliable
+  //     fallback when (1) and (2) aren't emitted (TG < 8.0 inline mode).
+  const ct = tg.contentSafeAreaInset?.top ?? 0;
+  const st = tg.safeAreaInset?.top ?? 0;
+  const stable = tg.viewportStableHeight ?? window.innerHeight;
+  const chromeOverlay = Math.max(0, window.innerHeight - stable);
+  const top = Math.max(ct, st, chromeOverlay);
+
+  const cb = tg.contentSafeAreaInset?.bottom ?? 0;
+  const sb = tg.safeAreaInset?.bottom ?? 0;
+  const bottom = Math.max(cb, sb);
+
   if (top > 0) root.style.setProperty('--tg-safe-top', `${top}px`);
+  else root.style.removeProperty('--tg-safe-top');
   if (bottom > 0) root.style.setProperty('--tg-safe-bottom', `${bottom}px`);
+  else root.style.removeProperty('--tg-safe-bottom');
 }
 
 let readyCalled = false;
