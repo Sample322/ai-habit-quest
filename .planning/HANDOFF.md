@@ -2,13 +2,13 @@
 
 > **Read this first** when picking up the project. Current state, live URLs, what works, what's broken, what to do next.
 
-*Last updated: 2026-06-01 (session 8). Owner: Иван (Telegram `888007035`). Repo: `Sample322/ai-habit-quest@master`. HEAD `4c00235`.*
+*Last updated: 2026-06-05 (session 14+). Owner: Иван (Telegram `888007035`). Repo: `Sample322/ai-habit-quest@master`. HEAD `dac4583`.*
 
 ---
 
 ## Current status — one paragraph
 
-Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (backend NestJS, web React+Vite, ai-service Python FastAPI) + Managed PostgreSQL, auto-deployed from GitHub. **Full day-1 loop works end-to-end:** Telegram `initData` auth → goal creation → real AI plan (OpenRouter/Llama) → daily tasks with streak/XP → goal delete with cascade. Shipped since launch: real AI plans (stub bug fixed), Prisma migrations, secret rotation, rate-limiting, in-app admin, referral program, Privacy/ToS, ranks + achievements + leaderboard, Premium gating, and Premium AI micro-tasks. **One real blocker remains: the Telegram bot can't reliably reach `api.telegram.org` from the RU host** (Telegram blocked in RU) — long-polling eventually connects but flaps ~10 min after each backend restart, and webhook is unreachable. This blocks Stars payments + bot reminders, not the Mini App itself (Mini App loads via user's own VPN).
+Telegram Mini App **AI Habit Quest** is **live on Timeweb Cloud**: three Apps (backend NestJS, web React+Vite, ai-service Python FastAPI) + Managed PostgreSQL, auto-deployed from GitHub. Full day-1 loop works end-to-end (auth → goal → AI plan → daily tasks → streak/XP). **All four roadmap phases shipped** plus feature waves A–UU (achievements/rarity, leagues, seasons, frames, reminder prefs, premium AI bonus tasks, profile editing, weekly recap, Stars + YooKassa payments, share-to-Story with rendered 1080×1920 JPEG card, daily AI quote, Sentry, Plausible, public landing, OG meta, DB backup docs). Most recent session: share card + sheet-mode layout chrome (TG `contentSafeAreaInset` wired into CSS variables, fullscreen request). Latest pass: ShareImage cleanup cron, leaderboard N+1 fix + `User.xpTotal` index migration (`20260605_xp_index`), Sentry dynamic import (saves ~80 kB when no DSN), Promise.all leaderboard, lazy-load ShareProgressCard (main bundle 269.74 → 263.95 kB). **One real blocker remains: the Telegram bot can't reliably reach `api.telegram.org` from the RU host** (Telegram blocked in RU) — long-polling flaps after restart. CF Worker proxy mitigates; webhook mode shipped behind `TELEGRAM_WEBHOOK_URL`.
 
 ---
 
