@@ -22,6 +22,8 @@ interface TelegramWebApp {
   /** TG 6.0+: visible Web App height after the last stable state. Excludes
    *  chrome painted *over* the WebView (sheet close-button strip). */
   viewportStableHeight?: number;
+  /** TG ≥ 6.7: 'ios' | 'android' | 'tdesktop' | 'web' | 'macos' | etc. */
+  platform?: string;
   /** TG 8.0+: ask the client to drop the sheet chrome and use the full screen. */
   requestFullscreen?: () => void;
   isFullscreen?: boolean;
@@ -94,7 +96,14 @@ function syncSafeAreaVars(tg: TelegramWebApp): void {
   const st = tg.safeAreaInset?.top ?? 0;
   const stable = tg.viewportStableHeight ?? window.innerHeight;
   const chromeOverlay = Math.max(0, window.innerHeight - stable);
-  const top = Math.max(ct, st, chromeOverlay);
+  // iOS TG does NOT reliably report chrome height through any of the three
+  // signals above when launched via an inline "Открыть приложение" button.
+  // Empirically the sheet close-button + drag-handle strip is ~80–100px on
+  // modern iPhones, so force a 100px floor on iOS. On menu-button launches
+  // this adds a slight gap but never overlaps; on inline launches it covers
+  // the overlap even when the API stays silent.
+  const iosFloor = tg.platform === 'ios' ? 100 : 0;
+  const top = Math.max(ct, st, chromeOverlay, iosFloor);
 
   const cb = tg.contentSafeAreaInset?.bottom ?? 0;
   const sb = tg.safeAreaInset?.bottom ?? 0;
