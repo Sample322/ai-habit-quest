@@ -161,25 +161,32 @@ export class SeasonsService {
       .map(([id, xp]) => ({ id, xp }))
       .sort((a, b) => b.xp - a.xp);
 
-    // Persist results + apply rewards.
-    for (let i = 0; i < sorted.length; i++) {
-      const entry = sorted[i];
-      const rank = i + 1;
-      const tier = TOP_REWARDS.find((r) => rank <= r.maxRank);
+    // Persist results + apply rewards. Cron runs hourly with a small writer
+    // budget; fan out the upserts in parallel and award Premium afterwards
+    // (only top-N anyway, so the grant loop is cheap).
+    await Promise.all(
+      sorted.map((entry, i) => {
+        const rank = i + 1;
+        const tier = TOP_REWARDS.find((r) => rank <= r.maxRank);
+        return this.prisma.seasonResult.upsert({
+          where: { seasonId_userId: { seasonId, userId: entry.id } },
+          update: { seasonalXp: entry.xp, finalRank: rank, rewardKind: tier?.kind ?? null },
+          create: {
+            seasonId,
+            userId: entry.id,
+            seasonalXp: entry.xp,
+            finalRank: rank,
+            rewardKind: tier?.kind ?? null,
+          },
+        });
+      }),
+    );
 
-      await this.prisma.seasonResult.upsert({
-        where: { seasonId_userId: { seasonId, userId: entry.id } },
-        update: { seasonalXp: entry.xp, finalRank: rank, rewardKind: tier?.kind ?? null },
-        create: {
-          seasonId,
-          userId: entry.id,
-          seasonalXp: entry.xp,
-          finalRank: rank,
-          rewardKind: tier?.kind ?? null,
-        },
-      });
-
-      if (tier) await this.grantPremium(entry.id, tier.days);
+    const winners = sorted
+      .map((entry, i) => ({ id: entry.id, tier: TOP_REWARDS.find((r) => i + 1 <= r.maxRank) }))
+      .filter((w): w is { id: string; tier: typeof TOP_REWARDS[number] } => Boolean(w.tier));
+    for (const w of winners) {
+      await this.grantPremium(w.id, w.tier.days);
     }
 
     await this.prisma.season.update({ where: { id: seasonId }, data: { status: SeasonStatus.closed } });
